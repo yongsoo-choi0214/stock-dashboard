@@ -1,0 +1,25 @@
+# --- secrets (반드시 최상단) ---
+.env
+.env.local
+*.key
+
+# --- python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- editor / os ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- 산출물 예외 ---
+# data/*.parquet 는 커밋 대상 (CLAUDE.md §2 "왜 data/를 커밋하는가")
+# 단, 탐색용 임시 산출물은 제외
+data/_tmp/
+*.log
