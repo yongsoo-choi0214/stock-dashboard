@@ -42,9 +42,28 @@ streamlit run app.py            # 대시보드
 | Phase | 내용 | 상태 |
 |---|---|---|
 | 0 | 부트스트랩 (구조/venv/gitignore) | ✅ |
-| 1 | 원시 응답 확인 (FRED/ECOS/pykrx/yfinance) | 진행 중 |
-| 2 | ETL 레이어 (store → base → fetcher) | |
-| 3 | 지표 + 테스트 | |
-| 4 | 대시보드 | |
+| 1 | 원시 응답 확인 | ✅ FRED·FDR·yfinance / ⏸ ECOS·KRX수급 (키 대기) |
+| 2 | ETL 레이어 (store → base → fetcher) | ✅ 무키 3종 (ecos·krx_flow 대기) |
+| 3 | 지표 + 테스트 | ✅ 53개 통과 |
+| 4 | 대시보드 | ✅ |
 | 5 | 자동화·배포 | |
 | 6 | 연구 확장 | |
+
+### 현재 수집되는 데이터
+
+| 파일 | 행 | 내용 |
+|---|---|---|
+| `macro.parquet` | 19,879 | FRED 7종 (연준총자산·TGA·역레포·M2·FF금리·10Y-2Y·HY OAS) |
+| `prices.parquet` | 37,733 | KOSPI/KOSDAQ/KOSPI200 + S&P500/나스닥/VIX/달러인덱스 |
+| `flows.parquet` | 0 | 투자자 수급 — `KRX_ID`/`KRX_PW` 필요 |
+
+### 명세와 달라진 점
+
+- **`WTREGEN`(TGA)은 백만 USD 단위**다. CLAUDE.md §7.4는 십억이라 적었으나
+  원시 최대값 1,816,687(=2020년 TGA $1.82조)이 백만임을 확정한다.
+  `series.yaml` 의 `scale: 0.001` + `expect_range` 로 처리·감시한다.
+- **pykrx 1.2+ 는 data.krx.co.kr 로그인이 필수**다. 지수 OHLCV 는
+  FinanceDataReader 로 대체했고(`ticker` 계약은 `KRX.{code}` 유지),
+  투자자 수급만 계정에 의존한다. → [docs/SETUP_KEYS.md](docs/SETUP_KEYS.md)
+- **FRED 는 키 없이도 동작**한다(`fredgraph.csv`). 키를 넣으면 `fredapi` 로
+  자동 전환되며, 그때 하이일드 OAS 의 전체 히스토리가 복구된다.
