@@ -5,5 +5,19 @@
     "rows": 19879,
     "max_date": "2026-08-07",
     "target_rows": 19879
+  },
+  "krx_index": {
+    "last_run": "2026-08-11T00:02:32+09:00",
+    "status": "ok",
+    "rows": 15990,
+    "max_date": "2026-08-10",
+    "target_rows": 37733
+  },
+  "us_equity": {
+    "last_run": "2026-08-11T00:02:35+09:00",
+    "status": "ok",
+    "rows": 21743,
+    "max_date": "2026-08-10",
+    "target_rows": 37733
   }
 }
