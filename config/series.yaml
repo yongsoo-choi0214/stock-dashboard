@@ -6,18 +6,23 @@ fred:
     unit_out: billion_usd
     scale: 0.001          # ★ 백만 → 십억 (§7.4)
     freq: W
+    expect_range: [500.0, 12000.0]
   - id: WTREGEN
     name: 재무부 일반계정(TGA)
-    unit_in: billion_usd
+    # ★ CLAUDE.md §7.4는 이 시리즈를 billion 이라 적었으나 실제로는 million 이다.
+    #    검증: 원시 최대값 1,816,687 = 2020년 COVID 당시 TGA $1.82조. billion이면 불가능.
+    unit_in: million_usd
     unit_out: billion_usd
-    scale: 1.0
+    scale: 0.001
     freq: W
+    expect_range: [1.0, 3000.0]     # 십억 USD 기준 상식 범위 (단위 사고 방지)
   - id: RRPONTSYD
     name: 익일물 역레포(ON RRP)
     unit_in: billion_usd
     unit_out: billion_usd
     scale: 1.0
     freq: D
+    expect_range: [0.0, 3000.0]
   - id: M2SL
     name: 미국 M2
     unit_in: billion_usd
