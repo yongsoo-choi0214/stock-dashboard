@@ -35,6 +35,8 @@ def build_registry() -> dict:
         from src.etl.krx import KrxIndexFetcher, KrxFlowFetcher
         reg["krx_index"] = KrxIndexFetcher
         reg["krx_flow"] = KrxFlowFetcher
+        from src.etl.krx import KrxAuxFetcher
+        reg["krx_aux"] = KrxAuxFetcher
     except ImportError:
         pass
 
@@ -85,6 +87,8 @@ def main() -> int:
             store.update_meta(name, "fail", error=f"{type(e).__name__}: {e}")
             failed.append(name)
 
+    record_snapshot()
+
     print(f"\n{'=' * 60}\n완료: {len(names) - len(failed)}/{len(names)} 성공")
     if failed:
         print(f"실패: {failed}")
@@ -96,5 +100,21 @@ def main() -> int:
     return 1 if failed and not a.ignore_fail else 0
 
 
+def record_snapshot() -> None:
+    """수집 후 그날의 지표 값을 박제한다. 실패해도 수집을 죽이지 않는다."""
+    try:
+        from src.research import snapshot
+        rows = snapshot.collect()
+        if not rows:
+            print("스냅샷: 기록할 지표 없음")
+            return
+        df = snapshot.record(rows)
+        print(f"스냅샷 {len(rows)}건 기록 (누적 {len(df)}행): "
+              + ", ".join(f"{k}={v:.3f}" for k, v in sorted(rows.items())))
+    except Exception as e:
+        print(f"스냅샷 실패 {type(e).__name__}: {e}")
+
+
 if __name__ == "__main__":
     raise SystemExit(main())
+

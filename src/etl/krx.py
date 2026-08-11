@@ -148,3 +148,57 @@ def _yearly_chunks(start: pd.Timestamp, end: pd.Timestamp):
 
 if __name__ == "__main__":
     KrxIndexFetcher().run()
+
+
+class KrxAuxFetcher(Fetcher):
+    """지수 부가 정보 — 시가총액·거래대금을 macro 에 넣는다.
+
+    ECOS 802Y001 은 유가증권시장 시총만 준다. 코스닥 시총이 없어서
+    코스닥 취약성 지수를 만들 수 없었다. FDR 은 두 시장 모두 2005년부터 준다.
+
+    금액은 **조원**으로 통일한다 — ECOS 계열과 같은 단위여야 지표가 성립한다.
+    """
+
+    source, target, keys = "krx_aux", "macro", ["date", "series_id"]
+    full_refresh = True
+
+    #: FDR 컬럼 → (series_id 접미사, 원 단위 → 조원 배수)
+    FIELDS = {"MarCap": ("marcap", 1e-12), "Amount": ("amount", 1e-12)}
+
+    def fetch(self, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+        frames: list[pd.DataFrame] = []
+        for item in settings.series_for("krx_index"):
+            code = str(item["ticker"])
+            symbol = FDR_SYMBOL.get(code)
+            if symbol is None:
+                continue
+            try:
+                raw = _fdr_read(symbol, start, end)
+            except Exception as e:
+                print(f"  [{code}] FAIL {type(e).__name__}: {e}")
+                continue
+            if raw.empty:
+                continue
+
+            idx = pd.to_datetime(raw.index)
+            if isinstance(idx.dtype, pd.DatetimeTZDtype):
+                idx = idx.tz_localize(None)
+
+            for col, (suffix, scale) in self.FIELDS.items():
+                if col not in raw.columns:
+                    continue
+                s = pd.to_numeric(raw[col], errors="coerce").dropna()
+                if s.empty:
+                    continue
+                frames.append(pd.DataFrame({
+                    "date": idx[raw.index.isin(s.index)].normalize(),
+                    "series_id": f"krx.{code}_{suffix}",
+                    "value": s.to_numpy(dtype="float64") * scale,
+                }))
+                print(f"  [krx.{code}_{suffix}] {len(s)}행  "
+                      f"last={s.iloc[-1] * scale:,.1f} 조원")
+            time.sleep(settings.KRX_SLEEP)
+
+        if not frames:
+            return pd.DataFrame(columns=["date", "series_id", "value"])
+        return pd.concat(frames, ignore_index=True)

@@ -48,6 +48,32 @@ fred:
     unit_out: percent
     scale: 1.0
     freq: D
+    # ★ ICE BofA 라이선스 계열이라 공개 범위가 최근 3년뿐이다(키가 있어도 동일).
+    #    조정 8회 중 2회만 덮어 백테스트에 쓸 수 없다 → BAA10Y 로 대체.
+
+  # 신용 스프레드 — 조정의 고전적 선행지표.
+  # 무디스 계열은 라이선스 제약이 없어 1990년부터 나온다(9,150행).
+  - id: BAA10Y
+    name: 무디스 Baa - 10년물 스프레드
+    unit_in: percent
+    unit_out: percent
+    scale: 1.0
+    freq: D
+    expect_range: [0.0, 10.0]
+  - id: AAA10Y
+    name: 무디스 Aaa - 10년물 스프레드
+    unit_in: percent
+    unit_out: percent
+    scale: 1.0
+    freq: D
+    expect_range: [0.0, 8.0]
+  - id: T10Y3M
+    name: 미국 10Y-3M 스프레드
+    unit_in: percent
+    unit_out: percent
+    scale: 1.0
+    freq: D
+    expect_range: [-6.0, 6.0]
 
 # ecos: 아래 코드는 StatisticTableList / StatisticItemList 로 탐색해 확정하고
 #       StatisticSearch 로 실제 값까지 확인한 것이다 (Phase 1).

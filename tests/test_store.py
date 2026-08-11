@@ -156,3 +156,24 @@ def test_update_meta_preserves_other_sources():
     meta = store.read_meta()
     assert set(meta) == {"fred", "krx"}
     assert meta["krx"]["status"] == "fail"
+
+
+def test_datetime_resolution_is_always_ns():
+    """pandas 2.x 는 to_datetime 이 입력 해상도를 보존한다.
+    parquet 왕복에서 ms 로 떨어지면 스키마 계약이 조용히 깨진다."""
+    df = pd.DataFrame({
+        "date": pd.Series(pd.to_datetime(["2026-01-01"])).astype("datetime64[ms]"),
+        "series_id": ["fred.X"], "value": [1.0],
+    })
+    store.write("macro", df)
+    assert str(store.read("macro")["date"].dtype) == "datetime64[ns]"
+
+
+def test_snapshots_schema_roundtrip():
+    df = pd.DataFrame({"date": pd.to_datetime(["2026-08-11"]),
+                       "metric": ["vulnerability"], "value": [0.7]})
+    store.write("snapshots", df)
+    out = store.read("snapshots")
+    assert str(out["date"].dtype) == "datetime64[ns]"
+    assert str(out["metric"].dtype) == "string"
+    assert out["value"].iloc[0] == 0.7

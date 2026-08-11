@@ -35,6 +35,13 @@ SCHEMAS: dict[str, dict[str, str]] = {
         "investor": "string",
         "net_value": "float64",
     },
+    # 지표 스냅샷 — 그날 실제로 계산된 값. append-only 로 다룬다.
+    # 재계산하면 과거가 바뀌므로, 당시 판단을 검증하려면 이 기록이 있어야 한다.
+    "snapshots": {
+        "date": "datetime64[ns]",
+        "metric": "string",
+        "value": "float64",
+    },
     # ALFRED 최초 발표치. macro 와 달리 '언제 알 수 있었는가'를 함께 들고 있다.
     # available_from 이 핵심 — 관측일이 아니라 공표일이 백테스트의 시간축이다.
     "vintages": {
@@ -50,6 +57,7 @@ KEYS: dict[str, list[str]] = {
     "prices": ["date", "ticker"],
     "flows": ["date", "market", "investor"],
     "vintages": ["date", "series_id"],
+    "snapshots": ["date", "metric"],
 }
 
 KST = timezone(timedelta(hours=9))
@@ -79,7 +87,9 @@ def coerce(name: str, df: pd.DataFrame) -> pd.DataFrame:
             # tz-aware 로 들어온 경우 tz 제거 후 자정 정규화 (§3.1)
             if isinstance(s.dtype, pd.DatetimeTZDtype):
                 s = s.dt.tz_localize(None)
-            out[col] = s.dt.normalize()
+            # pandas 2.x 의 to_datetime 은 입력 해상도를 보존한다(ms/us 가 그대로 남는다).
+            # parquet 왕복에서 ms 로 떨어지면 스키마 계약이 조용히 깨지므로 명시 변환.
+            out[col] = s.dt.normalize().astype("datetime64[ns]")
         else:
             out[col] = out[col].astype(dtype)
     return out.reset_index(drop=True)
