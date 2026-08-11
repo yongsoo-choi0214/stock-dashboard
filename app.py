@@ -510,6 +510,19 @@ with tab_res:
             st.caption("IC 는 향후 최대낙폭과의 순위상관. 낙폭은 음수라 "
                        "IC>0 이면 '값이 클수록 낙폭이 얕다' → 취약 방향은 반대입니다.")
 
+        st.markdown("**실전 검증 — 8번의 조정 고점에서 지수가 얼마였나**")
+        ev = vu.event_study(vidx, kospi_all)
+        st.dataframe(ev, width="stretch", hide_index=True)
+        n_hit = int((ev["판정"] == "경보").sum())
+        n_warn = int((ev["판정"] == "주의").sum())
+        st.caption(
+            f"경보 {n_hit}회 · 주의 {n_warn}회 · 무신호 {len(ev) - n_hit - n_warn}회. "
+            "**위 5분위 표보다 이쪽이 더 정직한 화면입니다.** 조건부 분포는 "
+            "뚜렷하게 갈리지만, '그 8번을 실제로 짚었나'는 다른 질문이고 절반쯤 "
+            "놓칩니다. 8번을 다 맞혔다면 오히려 미래 정보가 샜다고 의심해야 합니다. "
+            "확률을 기울이는 게이지로 쓰고, 매매 신호로 쓰지 마세요."
+        )
+
         with st.expander("조정 이력 (-15% 이상)"):
             show = ep.copy()
             show["depth"] = (show["depth"] * 100).round(1)
