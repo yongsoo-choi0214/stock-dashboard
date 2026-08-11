@@ -90,8 +90,10 @@ def explore_ecos(keyword: str | None = None) -> None:
     for kw in kws:
         hits = [r for r in rows if kw in (r.get("STAT_NAME") or "")]
         print(f"\n--- '{kw}' 포함 통계표 {len(hits)}건 (상위 10)")
-        for r in hits[:10]:
-            print(f"  {r['STAT_CODE']:<12} cycle={r.get('CYCLE','?'):<4} {r['STAT_NAME']}")
+        for r in hits[:12]:
+            # CYCLE 은 분류(대주제) 행에서 null 로 온다 — 실제 통계표만 주기가 있다
+            cyc = r.get("CYCLE") or "-"
+            print(f"  {r['STAT_CODE']:<12} cycle={cyc:<4} {r['STAT_NAME']}")
 
 
 def explore_ecos_items(stat_code: str) -> None:

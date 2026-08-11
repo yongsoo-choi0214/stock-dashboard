@@ -23,8 +23,8 @@ OK, NG, SKIP = "[ OK ]", "[ 실패 ]", "[ 없음 ]"
 def check_fred() -> bool:
     key = settings.FRED_API_KEY
     if not key:
-        print(f"{SKIP} FRED  — 키 없음. 지금은 무키 CSV 경로로 동작 중입니다.")
-        print("        키를 넣으면 하이일드 OAS 전체 히스토리가 복구됩니다.")
+        print(f"{SKIP} FRED  — 키 없음. 무키 CSV 경로로 동일한 데이터를 받고 있습니다.")
+        print("        (검증 결과 두 경로의 행 수가 같아, 키는 안정성 목적입니다)")
         return True   # 없어도 대시보드는 동작하므로 실패로 치지 않는다
     try:
         r = requests.get(

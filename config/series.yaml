@@ -49,30 +49,101 @@ fred:
     scale: 1.0
     freq: D
 
-# ecos: 통계표코드/항목코드는 하드코딩하지 말고
-#       StatisticTableList API로 탐색해 확정한 뒤 여기에 기록할 것 (§5.2 / Phase 1)
+# ecos: 아래 코드는 StatisticTableList / StatisticItemList 로 탐색해 확정하고
+#       StatisticSearch 로 실제 값까지 확인한 것이다 (Phase 1).
+#
+# 금액 계열은 모두 **조원**으로 통일한다. 단위 정규화는 ETL에서 끝낸다(설계원칙 4).
+# deposit_ratio(예탁금/시총), deposit_turnover(거래대금/예탁금) 가 단위 일치를
+# 전제로 하므로, 여기서 어긋나면 지표가 조용히 틀린다.
 ecos:
   - key: m2
-    name: 한국 M2(평잔)
-    stat_code: "TBD"
-    item_code: "TBD"
+    name: 한국 M2(평잔, 원계열)
+    stat_code: "161Y006"
+    item_code: "BBHA00"
     cycle: M
-    publication_lag_days: 60
+    unit_in: 십억원
+    unit_out: 조원
+    scale: 0.001
+    publication_lag_days: 60      # ★ 백테스트 시 shift 필요 (§7.2)
+
   - key: base_rate
     name: 한국은행 기준금리
-    stat_code: "TBD"
-    item_code: "TBD"
+    stat_code: "722Y001"
+    item_code: "0101000"
     cycle: D
-  - key: investor_deposit
-    name: 투자자예탁금
-    stat_code: "TBD"
-    item_code: "TBD"
-    cycle: D
+    unit_in: 연%
+    unit_out: percent
+    scale: 1.0
+    expect_range: [0.0, 25.0]
+
   - key: usdkrw
-    name: 원/달러 환율
-    stat_code: "TBD"
-    item_code: "TBD"
+    name: 원/달러 환율(매매기준율)
+    stat_code: "731Y001"
+    item_code: "0000001"
     cycle: D
+    unit_in: 원
+    unit_out: 원
+    scale: 1.0
+    expect_range: [500.0, 3000.0]
+
+  # 투자자예탁금은 '증시주변자금동향'(901Y056)에 있고 **월간만** 제공된다.
+  # 일간이 필요하면 KOFIA(freesis)를 붙여야 한다 — CLAUDE.md 의 kofia.py.
+  - key: investor_deposit
+    name: 투자자 예탁금
+    stat_code: "901Y056"
+    item_code: "S23A"
+    cycle: M
+    unit_in: 원
+    unit_out: 조원
+    scale: 1.0e-12
+    expect_range: [1.0, 500.0]
+
+  # --- 802Y001 '주식시장(일)' — 일간. 유동성 지표의 분모/분자가 여기서 나온다 ---
+  - key: kospi_marcap
+    name: 유가증권시장 시가총액
+    stat_code: "802Y001"
+    item_code: "0183000"
+    cycle: D
+    unit_in: 억원
+    unit_out: 조원
+    scale: 1.0e-4
+    expect_range: [100.0, 20000.0]
+
+  - key: kospi_value
+    name: 유가증권시장 거래대금
+    stat_code: "802Y001"
+    item_code: "0088000"
+    cycle: D
+    unit_in: 억원
+    unit_out: 조원
+    scale: 1.0e-4
+
+  - key: kosdaq_value
+    name: 코스닥시장 거래대금
+    stat_code: "802Y001"
+    item_code: "0091000"
+    cycle: D
+    unit_in: 억원
+    unit_out: 조원
+    scale: 1.0e-4
+
+  - key: foreign_net_kospi
+    name: 외국인 순매수(유가증권)
+    stat_code: "802Y001"
+    item_code: "0030000"
+    cycle: D
+    unit_in: 억원
+    unit_out: 조원
+    scale: 1.0e-4
+
+  - key: foreign_net_kosdaq
+    name: 외국인 순매수(코스닥)
+    stat_code: "802Y001"
+    item_code: "0113000"
+    cycle: D
+    unit_in: 억원
+    unit_out: 조원
+    scale: 1.0e-4
 
 krx_index:
   - ticker: "1001"

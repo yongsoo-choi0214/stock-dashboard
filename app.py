@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
+from plotly.subplots import make_subplots
 
 from config import settings
 from src import store
@@ -173,14 +174,71 @@ with tab_kr:
                                                title=f"{names[pick]} 이격도"),
                         width="stretch")
 
+    st.subheader("한국 유동성")
+    dep = clip(macro_series(macro, "ecos.investor_deposit"), start)
+    mcap = clip(macro_series(macro, "ecos.kospi_marcap"), start)
+    tval = clip(macro_series(macro, "ecos.kospi_value"), start)
+
+    if dep.empty:
+        st.info("예탁금 데이터가 없습니다. `python -m src.etl.run_all --only ecos`")
+    else:
+        import plotly.graph_objects as go
+        p = theme.palette(mode)
+        # 예탁금은 월간, 시총·거래대금은 일간 → 월말로 맞춰 비교한다
+        mcap_m = mcap.resample("ME").last()
+        tval_m = tval.resample("ME").mean()
+        ratio = lq.deposit_ratio(dep, mcap_m)
+        turn = lq.deposit_turnover(tval_m, dep)
+
+        f = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.07)
+        f.add_trace(go.Scatter(x=dep.index, y=dep, name="예탁금", mode="lines",
+                               line=dict(color=p["series"][0], width=2),
+                               hovertemplate="%{y:,.1f}조<extra>예탁금</extra>"),
+                    row=1, col=1)
+        f.add_trace(go.Scatter(x=ratio.index, y=ratio, name="예탁금/시총", mode="lines",
+                               line=dict(color=p["series"][1], width=2),
+                               hovertemplate="%{y:.2f}%<extra>예탁금/시총</extra>"),
+                    row=2, col=1)
+        f.update_yaxes(title_text="예탁금 (조원)", row=1, col=1)
+        f.update_yaxes(title_text="예탁금/시총 (%)", row=2, col=1)
+        f.update_layout(title="투자자 예탁금 (월간)")
+        st.plotly_chart(theme.apply(f, mode, height=520), width="stretch")
+
+        m1, m2_, m3 = st.columns(3)
+        m1.metric("예탁금", f"{dep.iloc[-1]:,.1f}조원", fmt_delta(dep))
+        if not ratio.empty:
+            m2_.metric("예탁금/시총", f"{ratio.iloc[-1]:.2f}%", fmt_delta(ratio))
+        if not turn.empty:
+            m3.metric("예탁금 회전율", f"{turn.iloc[-1]:.3f}", fmt_delta(turn))
+        st.caption("예탁금은 ECOS 증시주변자금동향(901Y056) 월간 계열입니다. "
+                   "시총·거래대금은 일간이라 월말/월평균으로 맞춰 계산했습니다.")
+
     st.subheader("투자자별 수급")
+    fk = clip(macro_series(macro, "ecos.foreign_net_kospi"), start)
+    if not fk.empty:
+        import plotly.graph_objects as go
+        p = theme.palette(mode)
+        fq = fk.resample("W").sum()
+        pos, neg = p["series"][0], p["series"][7]
+        f = go.Figure(go.Bar(
+            x=fq.index, y=fq, name="외국인 순매수",
+            marker=dict(color=[pos if v >= 0 else neg for v in fq],
+                        line=dict(width=0)),
+            hovertemplate="%{y:+,.2f}조<extra>주간 합계</extra>"))
+        f.add_hline(y=0, line=dict(color=p["axis"], width=1))
+        f.update_layout(title="외국인 순매수 — 유가증권시장 (주간 합계, 조원)",
+                        showlegend=False)
+        st.plotly_chart(theme.apply(f, mode, height=400), width="stretch")
+
     if flows.empty:
         st.info(
-            "flows.parquet 이 비어 있습니다. 투자자 수급은 data.krx.co.kr 계정이 "
-            "필요합니다 (`KRX_ID`/`KRX_PW`). docs/SETUP_KEYS.md 참고."
+            "개인/기관 구분은 `flows.parquet` 이 필요하고, 이건 data.krx.co.kr "
+            "계정(`KRX_ID`/`KRX_PW`)이 있어야 받습니다. 위 차트는 ECOS에서 오는 "
+            "외국인 수급만 표시합니다. docs/SETUP_KEYS.md 참고."
         )
     else:
-        mk = st.radio("시장", sorted(flows["market"].unique()), horizontal=True)
+        mk = st.radio("시장", sorted(flows["market"].unique()), horizontal=True,
+                      key="flow_market")
         st.plotly_chart(
             charts.investor_flow_bar(flows[flows["date"] >= start], mk, mode=mode),
             width="stretch")
@@ -207,7 +265,10 @@ with tab_liq:
                    "수요일 기준 주간 정렬. 단위 십억 USD.")
 
     others = {"fred.DFF": "연방기금 실효금리", "fred.T10Y2Y": "미 10Y-2Y",
-              "fred.BAMLH0A0HYM2": "하이일드 OAS", "fred.M2SL": "미국 M2"}
+              "fred.BAMLH0A0HYM2": "하이일드 OAS (3년치만 공개)",
+              "fred.M2SL": "미국 M2",
+              "ecos.base_rate": "한국은행 기준금리", "ecos.m2": "한국 M2(평잔)",
+              "ecos.usdkrw": "원/달러 환율"}
     have = {k: v for k, v in others.items() if not macro_series(macro, k).empty}
     if have:
         pick = st.selectbox("기타 매크로", list(have), format_func=lambda k: have[k])

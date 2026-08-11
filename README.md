@@ -65,5 +65,10 @@ streamlit run app.py            # 대시보드
 - **pykrx 1.2+ 는 data.krx.co.kr 로그인이 필수**다. 지수 OHLCV 는
   FinanceDataReader 로 대체했고(`ticker` 계약은 `KRX.{code}` 유지),
   투자자 수급만 계정에 의존한다. → [docs/SETUP_KEYS.md](docs/SETUP_KEYS.md)
-- **FRED 는 키 없이도 동작**한다(`fredgraph.csv`). 키를 넣으면 `fredapi` 로
-  자동 전환되며, 그때 하이일드 OAS 의 전체 히스토리가 복구된다.
+- **FRED 는 키 없이도 동작**한다(`fredgraph.csv`). 키가 있으면 `fredapi` 로
+  자동 전환된다. 두 경로의 반환 행 수는 동일하므로 키의 이득은 히스토리가
+  아니라 레이트리밋·안정성이다.
+- **하이일드 OAS 는 3년치만 공개된다.** ICE BofA 라이선스 계열이라 키가 있어도
+  같다(785행). 같은 API로 `T10Y2Y` 는 1997년치가 나오므로 인증 문제가 아니다.
+- **투자자예탁금은 ECOS `901Y056`(증시주변자금동향)에 있고 월간만 제공**된다.
+  일간이 필요하면 KOFIA(freesis)를 붙여야 한다.
