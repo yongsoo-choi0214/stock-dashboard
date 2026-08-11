@@ -44,6 +44,12 @@ def build_registry() -> dict:
     except ImportError:
         pass
 
+    try:
+        from src.etl.alfred import AlfredFetcher
+        reg["alfred"] = AlfredFetcher
+    except ImportError:
+        pass
+
     return reg
 
 

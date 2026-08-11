@@ -101,8 +101,47 @@ def vulnerability_result() -> dict:
         net_liquidity=netliq)
     if comp.dropna(how="all").empty:
         return {}
-    return vu.walk_forward(comp, close, horizon=60, split="2016-01-01",
-                           condition=vu.near_high(close))
+    res = vu.walk_forward(comp, close, horizon=60, split="2016-01-01",
+                          condition=vu.near_high(close))
+
+    # 시점(point-in-time) 검증 — 순유동성을 '당시 알 수 있었던 값'으로 바꿔
+    # 같은 구간·같은 분할로 재평가한다. 유출이 얼마였는지 그 차이가 말해준다.
+    res["pit"] = _pit_comparison(close, comp, foreign, opt)
+    return res
+
+
+def _pit_comparison(close, comp_now, foreign, opt) -> dict:
+    from src.etl.alfred import point_in_time
+
+    vint = store.read("vintages")
+    need = ["fred.WALCL", "fred.WTREGEN", "fred.RRPONTSYD"]
+    if vint.empty:
+        return {}
+    pit = {s: point_in_time(vint, s) for s in need}
+    if any(v.empty for v in pit.values()):
+        return {}
+
+    comp_pit = vu.build_components(
+        close, turnover=opt("ecos.kospi_value"), foreign_flow=foreign,
+        market_cap=opt("ecos.kospi_marcap"),
+        net_liquidity=lq.us_net_liquidity(*[pit[s] for s in need]))
+
+    common = comp_now.dropna().index.intersection(comp_pit.dropna().index)
+    if len(common) < 500:
+        return {}
+    mask = pd.Series(False, index=close.index)
+    mask.loc[common] = True
+    mask &= vu.near_high(close).reindex(close.index).fillna(False)
+
+    # 분할점은 공통 구간 '안쪽'이어야 한다. 밖에 두면 표본 내가 비어
+    # 방향이 기본값으로 떨어지고 비교가 성립하지 않는다.
+    split = "2021-01-01"
+    return {
+        "period": (common.min(), common.max()),
+        "split": split,
+        "now": vu.walk_forward(comp_now, close, split=split, condition=mask),
+        "pit": vu.walk_forward(comp_pit, close, split=split, condition=mask),
+    }
 
 
 def fmt_delta(s: pd.Series, periods: int = 1, pct: bool = True) -> str | None:
@@ -509,6 +548,28 @@ with tab_res:
             }).round(3), width="stretch")
             st.caption("IC 는 향후 최대낙폭과의 순위상관. 낙폭은 음수라 "
                        "IC>0 이면 '값이 클수록 낙폭이 얕다' → 취약 방향은 반대입니다.")
+
+        pit = vres.get("pit") or {}
+        if pit:
+            st.markdown("**시점(point-in-time) 검증 — 유출을 걷어내면 얼마나 떨어지나**")
+            a, b = pit["now"], pit["pit"]
+            st.dataframe(pd.DataFrame({
+                "IC (표본 내)": [a["ic_is"], b["ic_is"]],
+                "IC (표본 외)": [a["ic_oos"], b["ic_oos"]],
+            }, index=["현재판 (정정 반영된 최신값)",
+                      "시점판 (최초 발표치 + 공표일)"]).round(3),
+                width="stretch")
+            drop = abs(b["ic_oos"]) / abs(a["ic_oos"]) - 1 if a["ic_oos"] else 0
+            st.caption(
+                f"{pit['period'][0].date()} ~ {pit['period'][1].date()}, "
+                f"분할 {pit['split']}. **표본 외 성능 {drop:+.0%}.** "
+                "FRED 값은 나중에 정정되고 하루 뒤 공표되는데, 지금까지의 지표는 "
+                "'오늘 시점에서 본 과거'를 썼습니다. ALFRED 아카이브로 "
+                "'당시 실제로 알 수 있었던 값'을 넣어 다시 재면 성능이 이만큼 "
+                "내려갑니다. **이쪽이 진짜 숫자입니다.** "
+                "운영 지수는 히스토리가 긴 현재판을 쓰되(최근 값은 두 판이 동일), "
+                "성능은 이 숫자로 판단하세요."
+            )
 
         st.markdown("**실전 검증 — 8번의 조정 고점에서 지수가 얼마였나**")
         ev = vu.event_study(vidx, kospi_all)

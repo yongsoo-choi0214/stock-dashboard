@@ -47,7 +47,7 @@ jobs:
         run: |
           if [ "${{ github.event.schedule }}" = "30 22 * * 1-5" ]; then
             # 아침 실행: 한국장은 닫혀 있다. KRX 스크래핑(전체의 대부분)을 건너뛴다.
-            echo 'only=--only fred ecos us_equity' >> "$GITHUB_OUTPUT"
+            echo 'only=--only fred ecos us_equity alfred' >> "$GITHUB_OUTPUT"
             echo '아침 실행 — 미국·매크로만'
           elif [ -n "${{ inputs.sources }}" ]; then
             echo 'only=--only ${{ inputs.sources }}' >> "$GITHUB_OUTPUT"

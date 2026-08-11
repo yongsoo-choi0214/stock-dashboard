@@ -35,12 +35,21 @@ SCHEMAS: dict[str, dict[str, str]] = {
         "investor": "string",
         "net_value": "float64",
     },
+    # ALFRED 최초 발표치. macro 와 달리 '언제 알 수 있었는가'를 함께 들고 있다.
+    # available_from 이 핵심 — 관측일이 아니라 공표일이 백테스트의 시간축이다.
+    "vintages": {
+        "date": "datetime64[ns]",           # 관측일
+        "series_id": "string",
+        "value": "float64",                 # 최초 발표값 (이후 정정 반영 안 함)
+        "available_from": "datetime64[ns]",  # 이 값을 알 수 있게 된 날
+    },
 }
 
 KEYS: dict[str, list[str]] = {
     "macro": ["date", "series_id"],
     "prices": ["date", "ticker"],
     "flows": ["date", "market", "investor"],
+    "vintages": ["date", "series_id"],
 }
 
 KST = timezone(timedelta(hours=9))
