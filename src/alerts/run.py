@@ -168,19 +168,26 @@ def main() -> int:
         print(f"  [{mark}] {al.key} — {al.title}")
 
     if not fresh:
-        write_state(active)
+        # 신규가 없어도 상태는 갱신한다 — 조건이 풀린 key 를 지워야
+        # 나중에 다시 참이 될 때 울릴 수 있다. dry-run 은 예외.
+        if not dry:
+            write_state(active)
         return 0
 
     header = f"*시장 대시보드* · {pd.Timestamp.now(tz='Asia/Seoul'):%Y-%m-%d %H:%M}"
     text = header + "\n\n" + "\n\n".join(al.format() for al in fresh)
 
     if dry:
-        print("\n--- dry-run (전송 안 함) ---")
+        # ★ dry-run 은 상태를 쓰지 않는다. 쓰면 '무엇이 울릴지 확인'해 본 것만으로
+        #   다음 진짜 실행이 침묵한다 — 시험이 알림을 삼킨다.
+        #   부수효과로 CI 와 로컬이 같은 파일을 고쳐 생기던 병합 충돌도 사라진다.
+        print("\n--- dry-run (전송 안 함, 상태 미갱신) ---")
         print(text)
-    else:
-        if not send(text, token, chat_id):
-            return 1     # 상태를 갱신하지 않는다 → 다음 실행에 재시도
-        print(f"\n{len(fresh)}건 전송 완료")
+        return 0
+
+    if not send(text, token, chat_id):
+        return 1         # 상태를 갱신하지 않는다 → 다음 실행에 재시도
+    print(f"\n{len(fresh)}건 전송 완료")
 
     write_state(active)
     return 0
