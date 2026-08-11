@@ -39,23 +39,37 @@ streamlit run app.py            # 대시보드
 
 ## 진행 상황
 
+레포: https://github.com/yongsoo-choi0214/stock-dashboard
+
 | Phase | 내용 | 상태 |
 |---|---|---|
 | 0 | 부트스트랩 (구조/venv/gitignore) | ✅ |
-| 1 | 원시 응답 확인 | ✅ FRED·FDR·yfinance / ⏸ ECOS·KRX수급 (키 대기) |
-| 2 | ETL 레이어 (store → base → fetcher) | ✅ 무키 3종 (ecos·krx_flow 대기) |
-| 3 | 지표 + 테스트 | ✅ 53개 통과 |
-| 4 | 대시보드 | ✅ |
-| 5 | 자동화·배포 | |
-| 6 | 연구 확장 | |
+| 1 | 원시 응답 확인 | ✅ (KRX 수급만 계정 대기) |
+| 2 | ETL 레이어 (store → base → fetcher) | ✅ 4종 (krx_flow 대기) |
+| 3 | 지표 + 테스트 | ✅ |
+| 4 | 대시보드 | ✅ 탭 5종 |
+| 5 | 자동화 | ✅ Actions 자율 커밋 확인 / ⏸ Streamlit Cloud 연결 |
+| 6 | 연구 확장 | ✅ IC · 레짐 |
+
+테스트 88개 통과.
 
 ### 현재 수집되는 데이터
 
 | 파일 | 행 | 내용 |
 |---|---|---|
-| `macro.parquet` | 19,879 | FRED 7종 (연준총자산·TGA·역레포·M2·FF금리·10Y-2Y·HY OAS) |
-| `prices.parquet` | 37,733 | KOSPI/KOSDAQ/KOSPI200 + S&P500/나스닥/VIX/달러인덱스 |
-| `flows.parquet` | 0 | 투자자 수급 — `KRX_ID`/`KRX_PW` 필요 |
+| `macro.parquet` | 60,345 | FRED 7종 + ECOS 9종 |
+| `prices.parquet` | 37,736 | KOSPI/KOSDAQ/KOSPI200 + S&P500/나스닥/VIX/달러인덱스 |
+| `flows.parquet` | 0 | 개인·기관 수급 — `KRX_ID`/`KRX_PW` 필요 |
+
+ECOS 9종: M2(평잔) · 기준금리 · 원달러 · 투자자예탁금 · KOSPI 시가총액 ·
+거래대금(KOSPI/KOSDAQ) · 외국인 순매수(KOSPI/KOSDAQ).
+`802Y001` 덕분에 KRX 계정 없이도 외국인 수급·시총·거래대금이 확보된다.
+
+### 배포 남은 절차 (웹 UI 필요)
+
+1. https://share.streamlit.io 에 GitHub 계정으로 로그인
+2. "New app" → 이 레포 / `main` / `app.py` 선택
+3. 배포. Secrets 는 필요 없다 — 앱은 커밋된 parquet 만 읽는다(설계원칙 1)
 
 ### 명세와 달라진 점
 
