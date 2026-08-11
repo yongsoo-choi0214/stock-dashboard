@@ -2,10 +2,22 @@ name: update-data
 
 on:
   schedule:
-    # UTC 09:00 = KST 18:00, 평일. 한국장 마감(15:30 KST) 이후,
-    # 미국 전일 종가(05:00 KST 마감)도 이미 확정된 시각이다.
+    # ① 저녁 — UTC 09:00 = KST 18:00 (월~금).
+    #    한국장 마감(15:30) + 수급 확정 이후. 한국 데이터가 **당일치**로 들어온다.
+    #    미국은 아직 개장 전이라 전일 종가다.
     - cron: "0 9 * * 1-5"
+    # ② 아침 — UTC 22:30 = KST 07:30 (화~토).
+    #    그 시점 뉴욕은 18:30 으로 16:00 마감 후. 미국 **당일 종가**를 잡는다.
+    #    ★ UTC 1-5 여야 한다. 0-4 로 두면 일요일(미국장 없음)에 헛돌고,
+    #      금요일 미국 종가는 다음 월요일 저녁까지 이틀을 묵는다.
+    #    한국장은 열리기 전이라 krx_* 는 건너뛴다(스크래핑 비용 절약).
+    - cron: "30 22 * * 1-5"
   workflow_dispatch:
+    inputs:
+      sources:
+        description: "수집할 소스 (비우면 전체). 예: fred ecos us_equity"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -30,11 +42,25 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: 수집 대상 결정
+        id: pick
+        run: |
+          if [ "${{ github.event.schedule }}" = "30 22 * * 1-5" ]; then
+            # 아침 실행: 한국장은 닫혀 있다. KRX 스크래핑(전체의 대부분)을 건너뛴다.
+            echo 'only=--only fred ecos us_equity' >> "$GITHUB_OUTPUT"
+            echo '아침 실행 — 미국·매크로만'
+          elif [ -n "${{ inputs.sources }}" ]; then
+            echo 'only=--only ${{ inputs.sources }}' >> "$GITHUB_OUTPUT"
+          else
+            echo 'only=' >> "$GITHUB_OUTPUT"
+            echo '전체 수집'
+          fi
+
       - name: ETL 실행
         # --ignore-fail: KRX 계정처럼 선택적인 소스가 없다고 잡 전체를 죽이지
         # 않는다. 실패는 _meta.json 과 ::warning 주석으로 남아 대시보드 상단
         # 배지에 그대로 드러난다.
-        run: python -m src.etl.run_all --ignore-fail
+        run: python -m src.etl.run_all --ignore-fail ${{ steps.pick.outputs.only }}
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           ECOS_API_KEY: ${{ secrets.ECOS_API_KEY }}
