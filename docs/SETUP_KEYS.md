@@ -1,80 +1,149 @@
-# API 키 발급 가이드
+# API 키 받는 법 — 처음부터
 
-세 곳에서 자격증명을 받아 `c:\Research\stock-dashboard\.env` 에 채웁니다.
-`.env` 는 `.gitignore` 에 등록되어 있어 커밋되지 않습니다.
+## 0. 그전에: 키가 뭐고 어디에 넣나
 
----
+API 키는 **"이 데이터를 요청하는 게 나다"라고 밝히는 비밀번호 같은 문자열**입니다.
+기관이 무료로 데이터를 열어주되, 누가 얼마나 쓰는지는 알고 싶어서 요구합니다.
 
-## 1. FRED (미국 매크로) — 무료, 즉시 발급
+넣는 곳은 딱 한 군데입니다:
 
-연준 총자산·TGA·역레포·미국 M2·금리 등에 사용.
+```
+c:\Research\stock-dashboard\.env
+```
 
-1. https://fredaccount.stlouisfed.org/login/secure/ 에서 계정 생성
-   (이메일 인증 링크 클릭 필요)
-2. 로그인 후 https://fredaccount.stlouisfed.org/apikeys 접속
-3. **"Request API Key"** 클릭 → 용도란에 아무거나 (예: `personal research dashboard`)
-4. 32자리 소문자+숫자 문자열이 즉시 발급됨
+이 파일은 이미 만들어져 있고, 지금은 등호 뒤가 비어 있습니다:
+
+```
+FRED_API_KEY=
+ECOS_API_KEY=
+KRX_ID=
+KRX_PW=
+```
+
+받은 값을 **등호 뒤에 그대로 붙여넣으면 끝**입니다. 따옴표·공백 없이:
 
 ```
 FRED_API_KEY=abcdef0123456789abcdef0123456789
 ```
 
----
+> `.env` 는 `.gitignore` 맨 위에 등록돼 있어서 GitHub에 절대 올라가지 않습니다.
+> 키가 새는 사고의 대부분이 이걸 안 해서 생깁니다.
 
-## 2. ECOS (한국은행 경제통계) — 무료, 즉시 발급
-
-한국 M2·기준금리·투자자예탁금·원달러 환율에 사용.
-
-1. https://ecos.bok.or.kr/api/#/AuthKeyApply 접속
-2. 이메일 주소, 기관/용도 입력 후 신청
-3. **인증키가 입력한 이메일로 즉시 발송**됨 (승인 대기 없음)
-
-```
-ECOS_API_KEY=ABCD1234EFGH5678IJKL
-```
-
-> 주의: ECOS는 하루 호출 한도가 있습니다. Phase 1 탐색 시 `1/1000` 범위로 제한해 호출하세요.
-
----
-
-## 3. KRX (data.krx.co.kr) — 무료 회원가입, ★ 새로 필요해진 항목
-
-**CLAUDE.md 작성 시점 이후 pykrx 가 바뀌었습니다.** 설치된 pykrx 1.2.8 은
-`data.krx.co.kr` 로그인 세션 없이는 어떤 데이터도 반환하지 않습니다.
-(`pykrx/website/comm/auth.py` 가 `KRX_ID` / `KRX_PW` 환경변수를 읽어 로그인합니다.)
-
-1. http://data.krx.co.kr 접속 → 우측 상단 **회원가입**
-2. 개인회원 가입 (본인인증 필요, 무료)
-3. 가입한 아이디/비밀번호를 `.env` 에 기록
-
-```
-KRX_ID=myuserid
-KRX_PW=mypassword
-```
-
-### 이게 없으면 무엇을 못 하나
-
-| 데이터 | pykrx 없이 대안 | 비고 |
-|---|---|---|
-| KOSPI/KOSDAQ/KOSPI200 OHLCV | ✅ FinanceDataReader (`KS11`/`KQ11`/`KS200`) | 로그인 불필요. 시가총액·거래대금까지 제공 |
-| 투자자별 수급 (개인/외국인/기관) | ❌ 대안 없음 | `flows.parquet` 및 수급 차트 전체가 비게 됨 |
-
-즉 **수급 데이터를 포기할 게 아니라면 KRX 가입이 필요**합니다.
-
----
-
-## 4. 확인
+### 다 넣었으면 확인
 
 ```bash
 cd c:/Research/stock-dashboard
-.venv/Scripts/python.exe notebooks/00_explore_api.py
+.venv/Scripts/python.exe -m src.etl.check_keys
 ```
 
-4개 소스 모두 실제 데이터가 출력되면 Phase 1 DoD 통과입니다.
+키마다 실제로 데이터를 한 건씩 받아보고 `[ OK ]` / `[ 실패 ]` 를 찍어줍니다.
+아래 셋 중 하나를 받을 때마다 이 명령을 돌려보세요.
 
 ---
 
-## GitHub Actions 배포 시 (Phase 5)
+## 1. FRED — 미국 매크로 (급하지 않음)
 
-동일한 이름으로 Repository Secrets 에 등록합니다:
-`FRED_API_KEY`, `ECOS_API_KEY`, `KRX_ID`, `KRX_PW`
+**지금 없어도 대시보드는 돌아갑니다.** 키 없이 쓰는 공개 CSV 경로가 이미
+동작 중이라, FRED 7종은 전부 수집되고 있습니다. 다만 하이일드 OAS 한 종만
+2023년 8월 이후로 잘려 있고, 키를 넣으면 전체 히스토리가 복구됩니다.
+
+1. https://fredaccount.stlouisfed.org/login/secure/ 에서 계정을 만듭니다
+   (이메일·비밀번호. 인증 메일의 링크를 눌러야 활성화됩니다)
+2. 로그인한 상태로 https://fredaccount.stlouisfed.org/apikeys 로 갑니다
+3. API 키를 새로 요청하는 버튼을 누릅니다. 용도를 묻는 칸이 있으면
+   `personal research dashboard` 정도로 적으면 됩니다
+4. **32자리 문자열이 화면에 바로 뜹니다.** 메일을 기다릴 필요 없습니다
+
+```
+FRED_API_KEY=여기에붙여넣기
+```
+
+---
+
+## 2. ECOS — 한국은행 (한국 매크로를 원하면 필수)
+
+한국 M2, 기준금리, **투자자예탁금**, 원/달러 환율이 여기서만 나옵니다.
+키 없이 접근할 방법이 없습니다 (확인 결과 `INFO-100 인증키가 유효하지 않습니다`).
+
+1. https://ecos.bok.or.kr/api/#/AuthKeyApply 로 갑니다
+2. 이메일 주소와 사용 목적을 적고 신청합니다
+3. **인증키가 입력한 이메일로 발송됩니다.** 승인 대기 없이 바로 옵니다
+   (메일이 안 보이면 스팸함을 확인하세요)
+
+```
+ECOS_API_KEY=여기에붙여넣기
+```
+
+### ★ 키를 받은 뒤 한 단계가 더 있습니다
+
+`config/series.yaml` 의 ecos 항목 4개가 아직 `TBD` 입니다:
+
+```yaml
+ecos:
+  - key: m2
+    stat_code: "TBD"     # ← 이걸 채워야 함
+    item_code: "TBD"
+```
+
+한국은행은 통계마다 고유 코드가 있는데, 이건 **키가 있어야 목록을 조회**할 수
+있습니다. 키를 넣고 아래를 실행하면 후보 코드들이 나옵니다:
+
+```bash
+.venv/Scripts/python.exe notebooks/00_explore_api.py --only ecos
+```
+
+키만 알려주시면 이 코드 확정까지 제가 처리하겠습니다.
+
+---
+
+## 3. KRX — 투자자별 수급 (본인인증 필요)
+
+개인/외국인/기관 순매수 데이터입니다. 대시보드의 "한국 시장" 탭 하단이
+지금 비어 있는 이유가 이것입니다.
+
+**왜 필요해졌나**: pykrx 1.2 버전부터 `data.krx.co.kr` 로그인을 요구합니다.
+공개 API를 직접 호출해도 `400 LOGOUT` 이 돌아오는 걸 확인했습니다.
+CLAUDE.md 가 작성된 뒤에 바뀐 부분입니다.
+
+1. http://data.krx.co.kr 접속 → 우측 상단 회원가입
+2. 개인회원으로 가입 (휴대폰 본인인증이 필요합니다. 무료)
+3. **별도의 키 발급이 아니라, 가입한 아이디와 비밀번호를 그대로 씁니다**
+
+```
+KRX_ID=가입한아이디
+KRX_PW=가입한비밀번호
+```
+
+> 이건 진짜 계정 비밀번호라 다른 둘보다 조심해야 합니다. `.env` 는 커밋되지
+> 않지만, 나중에 GitHub Actions 로 자동화할 때는 Repository Secrets 에
+> 넣어야 합니다 (Phase 5).
+
+### 없으면 뭘 못 하나
+
+| 데이터 | 대안 | 상태 |
+|---|---|---|
+| KOSPI/KOSDAQ/KOSPI200 OHLCV | FinanceDataReader | ✅ 이미 수집 중 — 영향 없음 |
+| 투자자별 순매수 | 없음 | ❌ KRX 계정 필요 |
+
+---
+
+## 4. 우선순위 정리
+
+급한 순서대로:
+
+| | 소요 | 없으면 |
+|---|---|---|
+| **ECOS** | 2분 | 한국 매크로 전부 없음 (예탁금·기준금리·환율) |
+| **KRX** | 10분 (본인인증) | 수급 차트 없음 |
+| **FRED** | 3분 | 하이일드 OAS 히스토리만 짧음 |
+
+ECOS 하나만 받아도 대시보드가 눈에 띄게 채워집니다.
+
+---
+
+## 5. GitHub Actions 자동화 시 (Phase 5)
+
+`.env` 는 커밋되지 않으므로, 서버에서 돌리려면 같은 이름으로
+Repository Secrets 에 따로 등록해야 합니다:
+
+`FRED_API_KEY` · `ECOS_API_KEY` · `KRX_ID` · `KRX_PW`
