@@ -14,11 +14,17 @@
 """
 from __future__ import annotations
 
+import argparse
 import getpass
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 import requests
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parents[1]
 ENV = ROOT / ".env"
@@ -80,9 +86,44 @@ def find_chat_id(token: str) -> str | None:
         return None
 
 
+def existing(name: str) -> str:
+    """이미 .env 에 있는 값. 토큰만 새로 받는 경우 chat_id 를 재사용한다."""
+    if not ENV.exists():
+        return ""
+    for line in ENV.read_text(encoding="utf-8").splitlines():
+        if line.startswith(f"{name}="):
+            return line.split("=", 1)[1].strip()
+    return ""
+
+
+def push_secrets(token: str, chat_id: str, repo: str) -> bool:
+    """GitHub Secrets 갱신. 값은 stdin 으로 넘겨 명령행·히스토리에 남기지 않는다."""
+    if not shutil.which("gh"):
+        print("  gh 명령을 찾을 수 없습니다 — 수동 등록이 필요합니다.")
+        return False
+    ok = True
+    for name, value in [("TELEGRAM_BOT_TOKEN", token),
+                        ("TELEGRAM_CHAT_ID", chat_id)]:
+        r = subprocess.run(["gh", "secret", "set", name, "--repo", repo],
+                           input=value, text=True, capture_output=True)
+        if r.returncode == 0:
+            print(f"  {name} 등록 완료")
+        else:
+            ok = False
+            print(f"  {name} 실패: {r.stderr.strip()[:120]}")
+    return ok
+
+
 def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--repo", default="yongsoo-choi0214/stock-dashboard")
+    ap.add_argument("--no-secrets", action="store_true",
+                    help="GitHub Secrets 갱신을 건너뛴다")
+    a = ap.parse_args()
+
     print(f"\n대상 파일: {ENV}  (.gitignore 등록됨)\n")
-    print("@BotFather 에서 받은 토큰을 붙여넣으세요. 화면에 표시되지 않습니다.")
+    print("@BotFather 에서 받은 토큰을 붙여넣고 Enter.")
+    print("입력해도 화면에 아무것도 안 보이는 게 정상입니다.\n")
     try:
         token = getpass.getpass("봇 토큰: ").strip()
     except (KeyboardInterrupt, EOFError):
@@ -92,22 +133,33 @@ def main() -> int:
         print("토큰 형식이 아닙니다 (예: 123456789:AAF...). 중단합니다.")
         return 1
 
-    print("\nchat_id 를 찾는 중…")
+    print("\nchat_id 확인 중…")
     chat_id = find_chat_id(token)
     if not chat_id:
-        chat_id = input("chat_id 를 직접 입력 (모르면 Enter 로 건너뛰기): ").strip()
+        # 토큰만 재발급한 경우 대화방은 그대로다 — 기존 값을 쓴다
+        chat_id = existing("TELEGRAM_CHAT_ID")
+        if chat_id:
+            print(f"  최근 메시지가 없어 기존 chat_id 를 재사용합니다: {chat_id}")
     if not chat_id:
-        print("chat_id 없이는 전송할 수 없습니다. 봇에게 메시지를 보낸 뒤 다시 실행하세요.")
+        chat_id = input("  chat_id 직접 입력: ").strip()
+    if not chat_id:
+        print("chat_id 가 없으면 전송할 수 없습니다. 봇에게 메시지를 보낸 뒤 다시 실행하세요.")
         return 1
 
     write_env({"TELEGRAM_BOT_TOKEN": token, "TELEGRAM_CHAT_ID": chat_id})
-    print(f"\n저장했습니다. (토큰 {len(token)}자, chat_id {chat_id})")
-    print("\n다음:")
-    print("  .venv/Scripts/python.exe -m src.alerts.run --test")
-    print("\nGitHub Actions 에서도 보내려면 Secrets 에 같은 이름으로 등록하세요:")
-    print("  gh secret set TELEGRAM_BOT_TOKEN --repo yongsoo-choi0214/stock-dashboard")
-    print("  gh secret set TELEGRAM_CHAT_ID   --repo yongsoo-choi0214/stock-dashboard")
-    return 0
+    print(f"\n.env 저장 완료 (토큰 {len(token)}자, chat_id {chat_id})")
+
+    if not a.no_secrets:
+        print(f"\nGitHub Secrets 갱신 ({a.repo})")
+        push_secrets(token, chat_id, a.repo)
+
+    print("\n연결 확인 중…")
+    r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", timeout=20,
+                      json={"chat_id": chat_id,
+                            "text": "✅ 새 토큰으로 연결됐습니다."})
+    print("  전송 성공 — 휴대폰을 확인하세요." if r.status_code == 200
+          else f"  전송 실패 {r.status_code}: {r.text[:150]}")
+    return 0 if r.status_code == 200 else 1
 
 
 if __name__ == "__main__":
