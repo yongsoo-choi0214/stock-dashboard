@@ -47,7 +47,10 @@ TICKER_SLOT = {
     "YF.^GSPC": 0, "YF.^IXIC": 1, "YF.^VIX": 7, "YF.DX-Y.NYB": 3,
 }
 
-INVESTOR_SLOT = {"개인": 0, "외국인": 1, "기관합계": 2, "기타법인": 4, "기타외국인": 6}
+# pykrx get_market_trading_value_by_date 의 실제 컬럼명이다.
+# '외국인'이 아니라 '외국인합계' — 이름이 어긋나면 계열이 조용히 사라진다.
+INVESTOR_SLOT = {"개인": 0, "외국인합계": 1, "기관합계": 2, "기타법인": 4,
+                 "외국인": 1, "기타외국인": 6}
 
 
 def palette(mode: str = "light") -> dict:

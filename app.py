@@ -239,11 +239,18 @@ with tab_kr:
             "외국인 수급만 표시합니다. docs/SETUP_KEYS.md 참고."
         )
     else:
-        mk = st.radio("시장", sorted(flows["market"].unique()), horizontal=True,
-                      key="flow_market")
+        fc1, fc2 = st.columns([2, 3])
+        mk = fc1.radio("시장", sorted(flows["market"].unique()), horizontal=True,
+                       key="flow_market")
+        agg = fc2.radio("집계", ["W", "ME", None], horizontal=True, key="flow_freq",
+                        format_func=lambda f: {"W": "주간", "ME": "월간",
+                                               None: "일간"}[f])
         st.plotly_chart(
-            charts.investor_flow_bar(flows[flows["date"] >= start], mk, mode=mode),
+            charts.investor_flow_bar(flows[flows["date"] >= start], mk,
+                                     mode=mode, freq=agg),
             width="stretch")
+        st.caption("순매수 대금(원 단위 수집 → 억원 표시). "
+                   "네 구분의 합은 항상 0입니다 — 한쪽이 사면 다른 쪽이 팝니다.")
 
 with tab_liq:
     if nl.empty:

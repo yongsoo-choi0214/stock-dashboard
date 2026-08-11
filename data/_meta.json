@@ -28,8 +28,10 @@
     "target_rows": 60345
   },
   "krx_flow": {
-    "last_run": "2026-08-11T12:37:27+09:00",
-    "status": "fail",
-    "error": "RuntimeError: KRX_ID/KRX_PW 가 없어 투자자 수급을 받을 수 없습니다. data.krx.co.kr 회원가입 후 .env 에 기록하세요 (docs/SETUP_KEYS.md)."
+    "last_run": "2026-08-11T16:38:00+09:00",
+    "status": "ok",
+    "rows": 42648,
+    "max_date": "2026-08-11",
+    "target_rows": 42648
   }
 }

@@ -75,9 +75,21 @@ class KrxIndexFetcher(Fetcher):
 
 
 class KrxFlowFetcher(Fetcher):
-    """투자자별 순매수 대금. KRX_ID/KRX_PW 필요."""
+    """투자자별 **일간** 순매수 대금(원). KRX_ID/KRX_PW 필요.
+
+    ★ get_market_trading_value_by_**investor** 를 쓰면 안 된다.
+      그쪽은 요청 구간 전체를 하나로 합산해 13개 투자자 × 1행만 돌려준다.
+      1년 단위로 잘라 호출하면 '연 1행'짜리 시계열이 되어 쓸모가 없다.
+      by_**date** 가 날짜별 행을 준다. 컬럼이 곧 투자자다.
+
+    full_refresh 를 켜지 않는 이유: 스크래핑이라 호출 비용이 크다(§7.5).
+    lookback 재수집으로 최근 구간만 갱신한다.
+    """
 
     source, target, keys = "krx_flow", "flows", ["date", "market", "investor"]
+
+    # '전체'는 매수-매도 합이라 항상 0이다. 저장할 이유가 없다.
+    DROP_COLS = {"전체"}
 
     def fetch(self, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
         if not (os.getenv("KRX_ID") and os.getenv("KRX_PW")):
@@ -89,22 +101,36 @@ class KrxFlowFetcher(Fetcher):
 
         frames: list[pd.DataFrame] = []
         for market in ("KOSPI", "KOSDAQ"):
+            got = 0
             # 장기 구간은 1년 단위로 쪼개 요청한다 (§7.5)
             for s, e in _yearly_chunks(start, end):
-                raw = stock.get_market_trading_value_by_investor(
-                    s.strftime("%Y%m%d"), e.strftime("%Y%m%d"), market
-                )
-                time.sleep(settings.KRX_SLEEP)
+                try:
+                    raw = stock.get_market_trading_value_by_date(
+                        s.strftime("%Y%m%d"), e.strftime("%Y%m%d"), market)
+                except Exception as ex:
+                    print(f"  [{market}] {s.date()}~{e.date()} "
+                          f"FAIL {type(ex).__name__}: {ex}")
+                    continue
+                finally:
+                    time.sleep(settings.KRX_SLEEP)
+
                 if raw is None or raw.empty:
                     continue
-                # 인덱스=투자자, '순매수' 컬럼을 사용. 구간 합계이므로 종료일에 귀속.
-                col = "순매수" if "순매수" in raw.columns else raw.columns[-1]
-                frames.append(pd.DataFrame({
-                    "date": e.normalize(),
-                    "market": market,
-                    "investor": raw.index.astype(str),
-                    "net_value": pd.to_numeric(raw[col], errors="coerce"),
-                }))
+
+                cols = [c for c in raw.columns if c not in self.DROP_COLS]
+                # 와이드(날짜×투자자) → 롱포맷 (§3.3)
+                long = (raw[cols]
+                        .rename_axis("date").reset_index()
+                        .melt(id_vars="date", var_name="investor",
+                              value_name="net_value"))
+                long["market"] = market
+                long["net_value"] = pd.to_numeric(long["net_value"],
+                                                  errors="coerce")
+                long = long.dropna(subset=["net_value"])
+                frames.append(long)
+                got += len(long)
+
+            print(f"  [{market}] {got}행")
 
         if not frames:
             return pd.DataFrame(

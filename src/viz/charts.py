@@ -196,25 +196,44 @@ def disparity_bands(close: pd.Series, windows=(20, 60, 120), *,
 
 
 def investor_flow_bar(flows: pd.DataFrame, market: str, *,
-                      mode: str = "light",
-                      investors=("개인", "외국인", "기관합계")) -> go.Figure:
-    """투자자별 순매수 대금. 양수=순매수, 음수=순매도."""
+                      mode: str = "light", investors=None,
+                      freq: str | None = None) -> go.Figure:
+    """투자자별 순매수 대금. 양수=순매수, 음수=순매도.
+
+    investors 를 주지 않으면 데이터에 실제로 있는 구분을 쓴다.
+    이름을 하드코딩하면 소스가 '외국인'→'외국인합계' 처럼 바뀔 때
+    계열이 조용히 사라진다(에러도 안 난다).
+
+    freq: 'W'/'ME' 등. 일간 막대는 수천 개가 겹쳐 읽히지 않으므로
+    긴 구간에서는 합산해서 본다.
+    """
     p = theme.palette(mode)
     sub = flows[flows["market"] == market]
+    if investors is None:
+        order = ["개인", "외국인합계", "기관합계", "기타법인"]
+        present = set(sub["investor"])
+        investors = [i for i in order if i in present] + \
+                    sorted(present - set(order))
+
     fig = go.Figure()
     for inv in investors:
         s = sub[sub["investor"] == inv]
         if s.empty:
             continue
+        if freq:
+            s = (s.set_index("date")["net_value"].resample(freq).sum()
+                 .rename("net_value").reset_index())
         fig.add_trace(go.Bar(
             x=s["date"], y=s["net_value"] / 1e8, name=inv,
             marker=dict(color=theme.series_color(inv, mode, theme.INVESTOR_SLOT),
                         line=dict(width=0)),
             hovertemplate="%{y:,.0f}억<extra>" + inv + "</extra>"))
     fig.add_hline(y=0, line=dict(color=p["axis"], width=1))
-    fig.update_layout(title=f"{market} 투자자별 순매수 (억원)", barmode="group",
-                      bargap=0.25, bargroupgap=0.05)
-    return theme.apply(fig, mode, height=420)
+    label = {"W": " (주간 합계)", "ME": " (월간 합계)"}.get(freq or "", "")
+    fig.update_layout(title=f"{market} 투자자별 순매수{label} — 억원",
+                      barmode="relative", bargap=0.15)
+    fig.update_yaxes(title_text="억원")
+    return theme.apply(fig, mode, height=440)
 
 
 def kpi_row(metrics: dict) -> None:
