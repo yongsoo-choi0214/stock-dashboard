@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import traceback
 
@@ -51,6 +52,10 @@ def main() -> int:
     ap.add_argument("--only", nargs="*", help="실행할 소스 이름 (미지정 시 전체)")
     ap.add_argument("--lookback", type=int, default=None,
                     help="재수집 구간(일). 기본값은 settings.LOOKBACK_DAYS")
+    ap.add_argument("--ignore-fail", action="store_true",
+                    help="일부 소스가 실패해도 종료코드 0. 자동화용 — "
+                         "선택적 소스(krx_flow)가 없다고 전체 잡을 죽이지 않는다. "
+                         "실패 사실은 _meta.json 과 GitHub 주석으로 남는다.")
     a = ap.parse_args()
 
     registry = build_registry()
@@ -77,7 +82,12 @@ def main() -> int:
     print(f"\n{'=' * 60}\n완료: {len(names) - len(failed)}/{len(names)} 성공")
     if failed:
         print(f"실패: {failed}")
-    return 1 if failed else 0
+        if os.getenv("GITHUB_ACTIONS"):
+            # 실행 로그에 묻히지 않도록 워크플로 요약에 주석으로 띄운다
+            for name in failed:
+                err = store.read_meta().get(name, {}).get("error", "")
+                print(f"::warning title=ETL 실패 ({name})::{err}")
+    return 1 if failed and not a.ignore_fail else 0
 
 
 if __name__ == "__main__":

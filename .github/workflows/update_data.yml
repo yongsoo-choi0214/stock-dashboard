@@ -1,0 +1,63 @@
+name: update-data
+
+on:
+  schedule:
+    # UTC 09:00 = KST 18:00, 평일. 한국장 마감(15:30 KST) 이후,
+    # 미국 전일 종가(05:00 KST 마감)도 이미 확정된 시각이다.
+    - cron: "0 9 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # 수동 실행과 예약 실행이 겹쳐 같은 커밋을 두고 다투지 않게 한다
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: ETL 실행
+        # --ignore-fail: KRX 계정처럼 선택적인 소스가 없다고 잡 전체를 죽이지
+        # 않는다. 실패는 _meta.json 과 ::warning 주석으로 남아 대시보드 상단
+        # 배지에 그대로 드러난다.
+        run: python -m src.etl.run_all --ignore-fail
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          ECOS_API_KEY: ${{ secrets.ECOS_API_KEY }}
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+
+      - name: 스키마 회귀 검사
+        # 깨진 데이터를 커밋하는 것이 안 하는 것보다 나쁘다.
+        # 네트워크를 쓰지 않는 테스트만 골라 돌린다.
+        run: pytest tests/test_store.py tests/test_technical.py tests/test_liquidity.py tests/test_ecos.py -q
+
+      - name: 변경분 커밋
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet || git commit -m "data: $(date -u +%Y-%m-%d)"
+          git push
+
+      - name: 요약
+        if: always()
+        run: |
+          echo "### 데이터 갱신 결과" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat data/_meta.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
