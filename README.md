@@ -67,9 +67,24 @@ ECOS 9종: M2(평잔) · 기준금리 · 원달러 · 투자자예탁금 · KOSP
 
 ### 배포 남은 절차 (웹 UI 필요)
 
-1. https://share.streamlit.io 에 GitHub 계정으로 로그인
-2. "New app" → 이 레포 / `main` / `app.py` 선택
-3. 배포. Secrets 는 필요 없다 — 앱은 커밋된 parquet 만 읽는다(설계원칙 1)
+**새 계정을 만들지 않는다. GitHub 계정으로 로그인한다.**
+
+1. https://share.streamlit.io → **Continue with GitHub** → GitHub 로그인
+2. **Authorize streamlit** (public 레포 읽기 권한)
+3. **Create app** → 이미 있는 앱을 배포하는 쪽 선택
+   (템플릿에서 새로 만드는 경로가 아니다)
+4. 입력값
+   - Repository: `yongsoo-choi0214/stock-dashboard`
+   - Branch: `main`
+   - Main file path: `app.py`
+5. **Advanced settings** 에서 Python 3.11 선택 — 로컬 검증 환경과 맞춘다
+6. Deploy
+
+Secrets 는 **넣지 않는다.** 앱은 커밋된 parquet 만 읽으므로 API 키가 필요 없다
+(설계원칙 1). 키는 GitHub Actions 쪽 Repository Secrets 에만 있으면 된다.
+
+배포 후에는 Actions 가 `data/` 를 커밋할 때마다 Streamlit Cloud 가 자동으로
+다시 배포한다.
 
 ### 명세와 달라진 점
 
