@@ -146,9 +146,65 @@ ECOS 하나만 받아도 대시보드가 눈에 띄게 채워집니다.
 
 ---
 
-## 5. GitHub Actions 자동화 시 (Phase 5)
+## 5. 텔레그램 알림 (선택)
+
+RSI 과매수/과매도, 레짐 전환, 순유동성 급변, 수집 실패를 텔레그램으로 받습니다.
+같은 상태가 이어지면 다시 울리지 않습니다 — **상태가 바뀔 때만** 전송합니다.
+
+1. 텔레그램에서 **@BotFather** 검색 → 대화 시작
+2. `/newbot` → 봇 이름과 사용자명 지정 (사용자명은 `bot` 으로 끝나야 함)
+3. `123456789:AAF...` 형태의 **토큰**을 받는다
+4. **방금 만든 봇을 검색해 대화방을 열고 아무 메시지나 하나 보낸다**
+   (봇은 먼저 말을 걸 수 없다. 이걸 빠뜨리면 chat_id 를 못 찾는다)
+5. 등록 — 토큰은 화면에 표시되지 않고 `.env` 에만 기록됩니다
+
+```bash
+.venv/Scripts/python.exe scripts/set_telegram.py    # 토큰 입력 → chat_id 자동 탐색
+.venv/Scripts/python.exe -m src.alerts.run --test   # 연결 확인
+```
+
+토큰이 없어도 실행은 됩니다 — 전송 없이 출력만 하는 dry-run 으로 떨어집니다.
+알림은 부가 기능이라 없다고 데이터 갱신이 멈추지 않습니다.
+
+```bash
+.venv/Scripts/python.exe -m src.alerts.run --dry-run   # 지금 무엇이 울릴지 확인
+.venv/Scripts/python.exe -m src.alerts.run --reset     # 상태 초기화(전부 재전송)
+```
+
+---
+
+## 6. GitHub Actions 자동화 시 (Phase 5)
 
 `.env` 는 커밋되지 않으므로, 서버에서 돌리려면 같은 이름으로
-Repository Secrets 에 따로 등록해야 합니다:
+Repository Secrets 에 따로 등록해야 합니다.
+`FRED_API_KEY` / `ECOS_API_KEY` 는 등록 완료.
 
-`FRED_API_KEY` · `ECOS_API_KEY` · `KRX_ID` · `KRX_PW`
+```bash
+gh secret set KRX_ID             --repo yongsoo-choi0214/stock-dashboard
+gh secret set KRX_PW             --repo yongsoo-choi0214/stock-dashboard
+gh secret set TELEGRAM_BOT_TOKEN --repo yongsoo-choi0214/stock-dashboard
+gh secret set TELEGRAM_CHAT_ID   --repo yongsoo-choi0214/stock-dashboard
+```
+
+값을 물으면 그때 입력하면 되고, 셸 히스토리에 남지 않습니다.
+
+---
+
+## 부록: KOFIA 일간 예탁금은 왜 못 붙였나
+
+ECOS 예탁금(`901Y056/S23A`)은 **월간**이라 일간이 필요하면 금융투자협회
+freesis 를 붙여야 한다. 여기까지는 확인했다.
+
+- 투자자예탁금 메뉴 코드 `OS0021` → `parentDivId=MSIS10000000000000`,
+  `serviceId=STATSCU0100000060` (`/resources/stat/js/menu.js`)
+- 데이터 엔드포인트는 `POST /meta/getMetaDataList.do` (JSON only —
+  form-urlencoded 은 415 를 돌려준다)
+
+막힌 지점: freesis 는 eXbuilder6(cleopatra) SPA 이고, 이 엔드포인트는
+서비스별로 다른 **DataMap 컬럼 이름**을 요구한다. 그 이름은 런타임에
+동적으로 로드되는 서비스 모듈 안에 있어서 정적 JS 만 읽어서는 알 수 없다.
+추측한 파라미터로 보낸 요청은 전부 서버 예외 페이지를 돌려받았다.
+
+붙이려면 헤드리스 브라우저(playwright 등)로 실제 요청을 관찰해야 한다.
+다만 그건 크론에 브라우저 의존성을 얹는 일이라, 월간 예탁금으로 충분한
+현재로서는 권하지 않는다. CLAUDE.md 도 `kofia.py` 를 선택 항목으로 두었다.

@@ -1,0 +1,8 @@
+{
+  "active": [
+    "deposit:low",
+    "etl:fail:krx_flow",
+    "regime:수축"
+  ],
+  "updated": "2026-08-11T13:01:30+09:00"
+}
