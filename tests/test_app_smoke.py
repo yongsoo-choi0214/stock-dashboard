@@ -42,7 +42,9 @@ def test_app_runs_without_exception(has_data):
 def test_renders_core_elements(has_data):
     at = _run()
     assert at.title[0].value.startswith("매크로 유동성")
-    assert len(at.tabs) == 4
+    labels = [t.label for t in at.tabs]
+    for expected in ("개요", "한국 시장", "유동성", "크로스에셋"):
+        assert expected in labels, f"'{expected}' 탭 없음 (현재: {labels})"
     assert len(at.metric) >= 1
     assert not at.error
 

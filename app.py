@@ -13,6 +13,8 @@ from config import settings
 from src import store
 from src.indicators import liquidity as lq
 from src.indicators import technical as ta
+from src.research import ic as ic_mod
+from src.research import regime
 from src.viz import charts, theme
 
 st.set_page_config(page_title="Market Dashboard", layout="wide",
@@ -138,8 +140,8 @@ charts.kpi_row(kpi)
 st.divider()
 
 # --------------------------------------------------------------- 탭
-tab_ov, tab_kr, tab_liq, tab_x = st.tabs(
-    ["개요", "한국 시장", "유동성", "크로스에셋"])
+tab_ov, tab_kr, tab_liq, tab_x, tab_res = st.tabs(
+    ["개요", "한국 시장", "유동성", "크로스에셋", "연구"])
 
 with tab_ov:
     avail = [t for t in names if not close_of(prices, t).empty]
@@ -309,3 +311,95 @@ with tab_x:
                              for t in picks}).pct_change(fill_method=None).corr()
         st.subheader("일간 수익률 상관")
         st.dataframe(corr.style.format("{:.2f}"), width="stretch")
+
+with tab_res:
+    st.caption(
+        "지표가 실제로 앞날을 설명하는지 재는 화면입니다. "
+        "IC(Information Coefficient)는 신호와 이후 수익률의 순위상관이며, "
+        "**절대값이 아니라 부호의 안정성**을 봐야 합니다."
+    )
+
+    base_t = st.selectbox("대상 지수", [t for t in names
+                                     if not close_of(prices, t).empty],
+                          format_func=lambda t: names[t], key="res_ticker")
+    px = clip(close_of(prices, base_t), start)
+
+    if len(px) < 300:
+        st.info("표본이 부족합니다. 사이드바에서 기간을 늘리세요.")
+    else:
+        signals: dict[str, pd.Series] = {
+            f"RSI({rsi_n})": ta.rsi(px, rsi_n),
+            "이격도(20)": ta.disparity(px, 20),
+        }
+        if not nl.empty:
+            signals["순유동성 4주Δ"] = nl.diff(4)
+        for sid, label in [("ecos.investor_deposit", "예탁금"),
+                           ("ecos.usdkrw", "원/달러"),
+                           ("ecos.m2", "한국 M2"),
+                           ("ecos.foreign_net_kospi", "외국인순매수 20일합")]:
+            s = macro_series(macro, sid)
+            if s.empty:
+                continue
+            signals[label] = s.rolling(20).sum() if "순매수" in label else s
+
+        use_change = st.checkbox(
+            "레벨 대신 20일 변화량으로 평가", value=False,
+            help="추세가 있는 레벨 계열(환율·M2·예탁금)은 가격과 추세만 같아도 "
+                 "IC가 크게 나옵니다. 변화량으로 바꾸면 그 허수가 사라집니다.")
+        if use_change:
+            signals = {f"Δ{k}": v.diff(20) for k, v in signals.items()}
+
+        lags = {k: ic_mod.lag_for("ecos.m2") for k in signals if "M2" in k}
+        with st.spinner("IC 계산 중…"):
+            tbl = ic_mod.ic_table(signals, px, horizons=(5, 20, 60), lags=lags)
+        st.dataframe(tbl.style.format({c: "{:.3f}" for c in tbl.columns
+                                       if c != "n"}), width="stretch")
+        st.caption("hit_Nd = 신호 상위 절반 구간에서 N일 뒤 상승했던 비율. "
+                   "lag_days = series.yaml 의 발표 시차 (§7.2 look-ahead 방지).")
+
+        pick_sig = st.selectbox("롤링 IC 로 볼 신호", list(signals), key="res_sig")
+        horizon = st.radio("예측 기간", [5, 20, 60], index=1, horizontal=True,
+                           key="res_h", format_func=lambda h: f"{h}일")
+        with st.spinner("롤링 IC 계산 중…"):
+            r_ic = ic_mod.rolling_ic(signals[pick_sig], px, horizon, window=252,
+                                     lag_days=lags.get(pick_sig, 0))
+        if r_ic.dropna().empty:
+            st.info("롤링 IC 를 낼 표본이 부족합니다.")
+        else:
+            import plotly.graph_objects as go
+            pal = theme.palette(mode)
+            f = go.Figure(go.Scatter(x=r_ic.index, y=r_ic, mode="lines",
+                                     name="IC",
+                                     line=dict(color=pal["series"][0], width=2),
+                                     hovertemplate="%{y:.3f}<extra>IC</extra>"))
+            f.add_hline(y=0, line=dict(color=pal["axis"], width=1))
+            f.update_yaxes(range=[-1, 1], title_text="IC")
+            f.update_layout(title=f"{pick_sig} — {horizon}일 예측 IC (252일 롤링)",
+                            showlegend=False)
+            st.plotly_chart(theme.apply(f, mode, height=380), width="stretch")
+            st.caption(f"평균 {r_ic.mean():.3f} · 부호 유지 비율 "
+                       f"{max((r_ic > 0).mean(), (r_ic < 0).mean()):.1%}")
+
+    st.divider()
+    st.subheader("유동성 × 모멘텀 레짐")
+    if nl.empty:
+        st.info("FRED 유동성 데이터가 없어 레짐을 만들 수 없습니다.")
+    else:
+        reg = regime.classify(nl, close_of(prices, base_t))
+        if reg.empty:
+            st.info("레짐을 만들 표본이 부족합니다.")
+        else:
+            cur = regime.current(reg)
+            c1, c2, c3 = st.columns(3)
+            c1.metric("현재 레짐", cur["regime"], f"{cur['streak_days']}일 연속")
+            c2.metric("유동성 Δ 백분위", f"{cur['liq_pr']:.0%}")
+            c3.metric("모멘텀 백분위", f"{cur['mom_pr']:.0%}")
+
+            st.dataframe(regime.summarize(reg, close_of(prices, base_t), 20),
+                         width="stretch")
+            st.caption(
+                "유동성 4주 변화량과 60일 모멘텀을 각각 252일 롤링 백분위 50% "
+                "기준으로 잘라 4분면으로 나눕니다. "
+                "**서술 통계이지 전략 성과가 아닙니다** — 표본이 겹치고 "
+                "레짐 판정에 모멘텀이 이미 들어가 있습니다."
+            )
