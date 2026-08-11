@@ -41,25 +41,27 @@ streamlit run app.py            # 대시보드
 
 레포: https://github.com/yongsoo-choi0214/stock-dashboard
 
+배포: https://stock-dashboard-kvz7ywctxakq89rqcztbd4.streamlit.app/
+
 | Phase | 내용 | 상태 |
 |---|---|---|
-| 0 | 부트스트랩 (구조/venv/gitignore) | ✅ |
-| 1 | 원시 응답 확인 | ✅ (KRX 수급만 계정 대기) |
-| 2 | ETL 레이어 (store → base → fetcher) | ✅ 4종 (krx_flow 대기) |
+| 0 | 부트스트랩 | ✅ |
+| 1 | 원시 응답 확인 | ✅ |
+| 2 | ETL 레이어 | ✅ 5종 전부 |
 | 3 | 지표 + 테스트 | ✅ |
-| 4 | 대시보드 | ✅ 탭 5종 |
-| 5 | 자동화 | ✅ Actions 자율 커밋 확인 / ⏸ Streamlit Cloud 연결 |
-| 6 | 연구 확장 | ✅ IC · 레짐 |
+| 4 | 대시보드 | ✅ 탭 5종, Streamlit Cloud 배포 |
+| 5 | 자동화 | ✅ 5/5 성공, 자율 커밋 확인 |
+| 6 | 연구 확장 | ✅ IC · 레짐 · 텔레그램 알림 |
 
-테스트 88개 통과.
+테스트 115개 통과.
 
 ### 현재 수집되는 데이터
 
 | 파일 | 행 | 내용 |
 |---|---|---|
 | `macro.parquet` | 60,345 | FRED 7종 + ECOS 9종 |
-| `prices.parquet` | 37,736 | KOSPI/KOSDAQ/KOSPI200 + S&P500/나스닥/VIX/달러인덱스 |
-| `flows.parquet` | 0 | 개인·기관 수급 — `KRX_ID`/`KRX_PW` 필요 |
+| `prices.parquet` | 37,738 | KOSPI/KOSDAQ/KOSPI200 + S&P500/나스닥/VIX/달러인덱스 |
+| `flows.parquet` | 42,648 | 투자자별 일간 순매수 (KOSPI/KOSDAQ × 4구분, 2005~) |
 
 ECOS 9종: M2(평잔) · 기준금리 · 원달러 · 투자자예탁금 · KOSPI 시가총액 ·
 거래대금(KOSPI/KOSDAQ) · 외국인 순매수(KOSPI/KOSDAQ).
