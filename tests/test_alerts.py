@@ -173,3 +173,34 @@ def test_evaluate_runs_on_real_data():
     assert isinstance(out, list)
     assert all(isinstance(a, Alert) for a in out)
     assert len({a.key for a in out}) == len(out), "key 중복"
+
+
+# --- 취약성 규칙 -----------------------------------------------------------
+def _vuln_inputs(v_last: float, near: bool):
+    idx = pd.bdate_range("2026-01-01", periods=50)
+    v = pd.Series(np.linspace(0.3, v_last, 50), index=idx)
+    nh = pd.Series([True] * 49 + [near], index=idx)
+    return v, nh
+
+
+def test_vulnerability_fires_when_high_and_near_high():
+    v, nh = _vuln_inputs(0.9, near=True)
+    out = rules.vulnerability_high(v, nh, threshold=0.65)
+    assert len(out) == 1 and out[0].key == "vuln:high"
+
+
+def test_vulnerability_silent_when_below_threshold():
+    v, nh = _vuln_inputs(0.4, near=True)
+    assert rules.vulnerability_high(v, nh, threshold=0.65) == []
+
+
+def test_vulnerability_silent_when_already_in_drawdown():
+    """★ 조건화의 핵심. 이미 조정 중이면 취약성이 높아도 울리지 않는다 —
+    그건 새로운 정보가 아니라 이미 아는 사실이다."""
+    v, nh = _vuln_inputs(0.95, near=False)
+    assert rules.vulnerability_high(v, nh, threshold=0.65) == []
+
+
+def test_vulnerability_empty_input_silent():
+    empty = pd.Series(dtype="float64", index=pd.DatetimeIndex([]))
+    assert rules.vulnerability_high(empty, empty) == []

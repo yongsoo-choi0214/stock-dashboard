@@ -79,7 +79,41 @@ def evaluate() -> list[Alert]:
     if not dep.empty and not mcap.empty:
         out += rules.deposit_extreme(lq.deposit_ratio(dep, mcap.resample("ME").last()))
 
+    out += _vulnerability_alerts(macro, prices, ms)
     return out
+
+
+def _vulnerability_alerts(macro, prices, ms) -> list[Alert]:
+    """취약성 지수. 입력이 하나라도 없으면 조용히 건너뛴다(설계원칙 5)."""
+    from src.research import vulnerability as vu
+
+    close = prices[prices["ticker"] == "KRX.1001"].set_index("date")["close"]
+    if close.empty:
+        return []
+    close = close.sort_index().astype("float64")
+
+    flows = store.read("flows")
+    foreign = None
+    if not flows.empty:
+        sel = flows[(flows["market"] == "KOSPI") &
+                    (flows["investor"] == "외국인합계")]
+        if not sel.empty:
+            foreign = sel.set_index("date")["net_value"].sort_index() / 1e12
+
+    need = ["fred.WALCL", "fred.WTREGEN", "fred.RRPONTSYD"]
+    netliq = (lq.us_net_liquidity(*[ms(s) for s in need])
+              if all(not ms(s).empty for s in need) else None)
+
+    def opt(sid):
+        s = ms(sid)
+        return None if s.empty else s
+
+    comp = vu.build_components(close, turnover=opt("ecos.kospi_value"),
+                               foreign_flow=foreign,
+                               market_cap=opt("ecos.kospi_marcap"),
+                               net_liquidity=netliq)
+    idx = vu.build_index(comp)
+    return rules.vulnerability_high(idx, vu.near_high(close))
 
 
 # ------------------------------------------------------------------ 전송

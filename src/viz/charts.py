@@ -246,3 +246,68 @@ def kpi_row(metrics: dict) -> None:
     for col, (label, v) in zip(cols, metrics.items()):
         value, delta = v if isinstance(v, tuple) else (v, None)
         col.metric(label, value, delta)
+
+
+def add_episode_shading(fig, ep: pd.DataFrame, *, mode: str = "light",
+                        row: int | None = None) -> None:
+    """조정 국면을 세로 음영으로 표시한다 (고점 → 저점).
+
+    저점까지만 칠하는 이유: 회복 구간까지 칠하면 화면 절반이 음영이 된다
+    (KOSPI 는 전체 일수의 39%가 -15% 이하 낙폭 상태였다).
+    위험이 '진행된' 구간만 보여주는 편이 눈에 들어온다.
+    """
+    p = theme.palette(mode)
+    fill = "rgba(227,73,72,0.10)" if mode == "light" else "rgba(230,103,103,0.13)"
+    for _, r in ep.iterrows():
+        # pandas Timestamp 를 그대로 넘기면 이미지 내보내기에서 직렬화가 깨진다
+        kw = dict(x0=pd.Timestamp(r["peak"]).isoformat(),
+                  x1=pd.Timestamp(r["trough"]).isoformat(),
+                  fillcolor=fill, line_width=0, layer="below")
+        if row is not None:
+            fig.add_vrect(row=row, col=1, **kw)
+        else:
+            fig.add_vrect(**kw)
+
+
+def vulnerability_panel(index: pd.Series, close: pd.Series, ep: pd.DataFrame,
+                        *, mode: str = "light", threshold: float = 0.8,
+                        applicable: pd.Series | None = None) -> go.Figure:
+    """상단 지수(음영 포함) + 하단 취약성. x축 공유."""
+    p = theme.palette(mode)
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        row_heights=[0.55, 0.45], vertical_spacing=0.06)
+
+    fig.add_trace(go.Scatter(x=close.index, y=close, name="지수", mode="lines",
+                             line=dict(color=p["series"][0], width=2),
+                             hovertemplate="%{y:,.0f}<extra>지수</extra>"),
+                  row=1, col=1)
+    # 20년 구간을 선형축으로 그리면 최근 급등에 눌려 과거가 평평해진다.
+    # 로그축이라야 2008년 -54% 와 2026년 -39% 가 비슷한 기울기로 보인다.
+    fig.update_yaxes(type="log", row=1, col=1)
+
+    fig.add_trace(go.Scatter(x=index.index, y=index, name="취약성", mode="lines",
+                             line=dict(color=p["series"][7], width=2),
+                             hovertemplate="%{y:.2f}<extra>취약성</extra>"),
+                  row=2, col=1)
+
+    if applicable is not None:
+        # 조건 밖(이미 조정 중) 구간은 회색으로 덮어 '해석 불가'를 드러낸다
+        masked = index.where(~applicable.reindex(index.index).fillna(False))
+        fig.add_trace(go.Scatter(x=masked.index, y=masked, name="적용 밖(조정 진행 중)",
+                                 mode="lines", line=dict(color=p["muted"], width=2),
+                                 hovertemplate="%{y:.2f}<extra>적용 밖</extra>"),
+                      row=2, col=1)
+
+    fig.add_hline(y=threshold, line=dict(color=p["muted"], width=1, dash="dash"),
+                  annotation_text=f"{threshold:.0%} 경계",
+                  annotation_position="top left",
+                  annotation_font=dict(color=p["muted"], size=10), row=2, col=1)
+
+    if not ep.empty:
+        add_episode_shading(fig, ep, mode=mode, row=1)
+        add_episode_shading(fig, ep, mode=mode, row=2)
+
+    fig.update_yaxes(title_text="지수", row=1, col=1)
+    fig.update_yaxes(title_text="취약성", range=[0, 1], row=2, col=1)
+    fig.update_layout(title="취약성 지수 — 음영은 -15% 이상 조정 구간(고점→저점)")
+    return theme.apply(fig, mode, height=620)

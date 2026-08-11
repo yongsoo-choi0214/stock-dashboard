@@ -15,6 +15,7 @@ from src.indicators import liquidity as lq
 from src.indicators import technical as ta
 from src.research import ic as ic_mod
 from src.research import regime
+from src.research import vulnerability as vu
 from src.viz import charts, theme
 
 st.set_page_config(page_title="Market Dashboard", layout="wide",
@@ -59,6 +60,49 @@ def macro_series(macro: pd.DataFrame, sid: str) -> pd.Series:
 
 def clip(s: pd.Series, start: pd.Timestamp) -> pd.Series:
     return s[s.index >= start]
+
+
+@st.cache_data(ttl=3600)
+def vulnerability_result() -> dict:
+    """취약성 지수 + walk-forward 검증 결과. 계산이 무거워 캐시한다."""
+    macro_, prices_, flows_ = store.read("macro"), store.read("prices"), store.read("flows")
+    if macro_.empty or prices_.empty:
+        return {}
+
+    def ms(sid: str) -> pd.Series:
+        s = macro_[macro_["series_id"] == sid].set_index("date")["value"]
+        return s.sort_index().astype("float64")
+
+    close = prices_[prices_["ticker"] == "KRX.1001"].set_index("date")["close"]
+    close = close.sort_index().astype("float64")
+    if close.empty:
+        return {}
+
+    foreign = None
+    if not flows_.empty:
+        sel = flows_[(flows_["market"] == "KOSPI") &
+                     (flows_["investor"] == "외국인합계")]
+        if not sel.empty:
+            foreign = sel.set_index("date")["net_value"].sort_index() / 1e12
+
+    need = ["fred.WALCL", "fred.WTREGEN", "fred.RRPONTSYD"]
+    netliq = (lq.us_net_liquidity(*[ms(s) for s in need])
+              if all(not ms(s).empty for s in need) else None)
+
+    def opt(sid: str) -> pd.Series | None:
+        # Series 는 `or` 로 기본값을 줄 수 없다 (진리값이 모호)
+        s = ms(sid)
+        return None if s.empty else s
+
+    comp = vu.build_components(
+        close, turnover=opt("ecos.kospi_value"),
+        foreign_flow=foreign,
+        market_cap=opt("ecos.kospi_marcap"),
+        net_liquidity=netliq)
+    if comp.dropna(how="all").empty:
+        return {}
+    return vu.walk_forward(comp, close, horizon=60, split="2016-01-01",
+                           condition=vu.near_high(close))
 
 
 def fmt_delta(s: pd.Series, periods: int = 1, pct: bool = True) -> str | None:
@@ -410,3 +454,66 @@ with tab_res:
                 "**서술 통계이지 전략 성과가 아닙니다** — 표본이 겹치고 "
                 "레짐 판정에 모멘텀이 이미 들어가 있습니다."
             )
+
+    st.divider()
+    st.subheader("취약성 지수 — 조정 위험 게이지")
+
+    vres = vulnerability_result()
+    if not vres:
+        st.info("취약성 지수를 만들 데이터가 부족합니다.")
+    else:
+        vidx, vtgt = vres["index"], vres["target"]
+        kospi_all = close_of(prices, "KRX.1001")
+        nh = vu.near_high(kospi_all)
+        cur_v = vidx.dropna()
+        applicable = bool(nh.iloc[-1]) if len(nh) else False
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("현재 취약성", f"{cur_v.iloc[-1]:.2f}" if not cur_v.empty else "—",
+                  help="0~1. 높을수록 취약. 5개 컴포넌트의 롤링 백분위 평균(20일 평활)")
+        c2.metric("현재 낙폭", f"{vu.drawdown(kospi_all).iloc[-1]:.1%}")
+        c3.metric("지수 적용 가능?", "예" if applicable else "아니오 — 이미 조정 중",
+                  help="고점 대비 -10% 이내일 때만 해석합니다")
+
+        if not applicable:
+            st.warning(
+                "지금은 이미 조정이 진행 중이라 이 지수를 '앞으로 빠질까'로 "
+                "읽으면 안 됩니다. 고점 대비 -10% 이내로 회복한 뒤부터 유효합니다."
+            )
+
+        ep = vu.episodes(kospi_all)
+        ep_shown = ep[ep["peak"] >= cur_v.index.min()] if not cur_v.empty else ep
+        st.plotly_chart(
+            charts.vulnerability_panel(cur_v, kospi_all[kospi_all.index >= cur_v.index.min()],
+                                       ep_shown, mode=mode, applicable=nh),
+            width="stretch")
+
+        st.markdown("**검증 — 전반부에서 방향만 정하고 후반부(2016~)에서 평가**")
+        m1, m2 = st.columns(2)
+        m1.metric("IC (표본 내, ~2015)", f"{vres['ic_is']:+.3f}")
+        m2.metric("IC (표본 외, 2016~)", f"{vres['ic_oos']:+.3f}",
+                  help="두 값이 비슷해야 과적합이 아닙니다")
+        st.dataframe(vres["deciles_oos"], width="stretch")
+        st.caption(
+            "취약성 5분위별 **향후 60영업일 최대낙폭** (고점 근처 구간만). "
+            "학습 파라미터는 0개 — 컴포넌트를 롤링 백분위로 정규화해 평균낼 뿐이고, "
+            "각 컴포넌트의 방향만 2015년까지 데이터로 정했습니다. "
+            "조정은 21.6년간 8회뿐이라 이걸 '예측'이 아니라 **위험 게이지**로 봐야 합니다."
+        )
+
+        with st.expander("컴포넌트별 기여"):
+            st.dataframe(pd.DataFrame({
+                "표본내 IC": pd.Series(vres["is_ic"]),
+                "취약 방향": pd.Series(vres["orient"]).map(
+                    {1: "값이 클수록 취약", -1: "값이 작을수록 취약"}),
+            }).round(3), width="stretch")
+            st.caption("IC 는 향후 최대낙폭과의 순위상관. 낙폭은 음수라 "
+                       "IC>0 이면 '값이 클수록 낙폭이 얕다' → 취약 방향은 반대입니다.")
+
+        with st.expander("조정 이력 (-15% 이상)"):
+            show = ep.copy()
+            show["depth"] = (show["depth"] * 100).round(1)
+            show["기간(일)"] = (show["trough"] - show["peak"]).dt.days
+            st.dataframe(show.rename(columns={"peak": "고점", "trough": "저점",
+                                              "end": "회복", "depth": "낙폭%"}),
+                         width="stretch")

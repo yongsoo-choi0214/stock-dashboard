@@ -90,6 +90,27 @@ def deposit_extreme(ratio: pd.Series, window: int = 60,
     return []
 
 
+def vulnerability_high(index: pd.Series, near_high: pd.Series,
+                       threshold: float = 0.65) -> list[Alert]:
+    """취약성 지수가 임계를 넘었을 때. **고점 근처일 때만** 울린다.
+
+    조건을 다는 이유가 이 규칙의 핵심이다. 이미 30% 빠진 자리에서 취약성이
+    높다고 알리는 건 소음이다 — 그건 이미 아는 사실이다. 고점 근처에서
+    높을 때만 새로운 정보다(검증: 조건 없으면 IC -0.126, 조건 붙이면 -0.434).
+    """
+    v = index.dropna()
+    if v.empty:
+        return []
+    if not bool(near_high.reindex(v.index).ffill().iloc[-1]):
+        return []          # 이미 조정 중 — 이 지수를 경보로 쓰면 안 된다
+    cur = float(v.iloc[-1])
+    if cur < threshold:
+        return []
+    return [Alert("vuln:high", "warn", "취약성 지수 경계 초과",
+                  f"취약성 {cur:.2f} (≥{threshold:.2f}), 고점 근처.\n"
+                  f"과거 같은 구간의 향후 60일 최대낙폭은 평균 -8% 수준이었습니다.")]
+
+
 def data_staleness(meta: dict, max_lag_days: int = 5,
                    today: pd.Timestamp | None = None) -> list[Alert]:
     """수집 실패 / 데이터 지연.
