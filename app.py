@@ -15,7 +15,9 @@ from src.indicators import liquidity as lq
 from src.indicators import technical as ta
 from src.research import ic as ic_mod
 from src.research import regime
+from src.research import catalog as catalog_mod
 from src.research import snapshot as snapshot_mod
+from src.research import summary
 from src.research import vulnerability as vu
 from src.viz import charts, theme
 
@@ -230,11 +232,38 @@ if not nl.empty:
     kpi["미국 순유동성"] = (f"{nl.iloc[-1]:,.0f}B$", fmt_delta(nl, pct=False))
 
 charts.kpi_row(kpi)
+
+# --------------------------------------------------------------- 오늘 요약
+_kospi = close_of(prices, "KRX.1001")
+if not _kospi.empty:
+    _reg = regime.classify(nl, _kospi) if not nl.empty else pd.DataFrame()
+    _cur = regime.current(_reg)
+    _vres = vulnerability_result()
+    _ff = flows[(flows["market"] == "KOSPI") &
+                (flows["investor"] == "외국인합계")].set_index("date")["net_value"]
+    _aa, _k3, _k10 = (macro_series(macro, f"ecos.{x}")
+                      for x in ("corp_aa", "ktb3y", "ktb10y"))
+    rows = summary.build(
+        close=_kospi, drawdown=vu.drawdown(_kospi),
+        vulnerability=_vres.get("index") if _vres else None,
+        applicable=bool(vu.near_high(_kospi).iloc[-1]),
+        regime=_cur.get("regime"), regime_days=_cur.get("streak_days"),
+        foreign_flow=_ff.sort_index() if not _ff.empty else None,
+        credit_spread=(_aa - _k3).dropna() if not _aa.empty else None,
+        yield_curve=(_k10 - _k3).dropna() if not _k10.empty else None,
+        bsi=macro_series(macro, "ecos.bsi"), meta=meta)
+    if rows:
+        icon = {"ok": "🟢", "warn": "🟡", "bad": "🔴", "info": "⚪"}
+        st.markdown(
+            "**오늘** &nbsp; "
+            + " &nbsp;·&nbsp; ".join(f"{icon.get(l, '•')} {lab} **{v}**"
+                                    for l, lab, v in rows))
+
 st.divider()
 
 # --------------------------------------------------------------- 탭
-tab_ov, tab_kr, tab_liq, tab_x, tab_res = st.tabs(
-    ["개요", "한국 시장", "유동성", "크로스에셋", "연구"])
+tab_ov, tab_kr, tab_liq, tab_x, tab_res, tab_data = st.tabs(
+    ["개요", "한국 시장", "유동성", "크로스에셋", "연구", "데이터"])
 
 with tab_ov:
     avail = [t for t in names if not close_of(prices, t).empty]
@@ -748,3 +777,58 @@ with tab_res:
                 st.warning(
                     f"기록값과 재계산값이 최대 {diff['차이'].abs().max():.3f} "
                     "차이납니다 — 그 사이 방법론이 바뀌었다는 뜻입니다.")
+
+with tab_data:
+    st.subheader("데이터 카탈로그")
+    st.caption(
+        "수집 중인 모든 계열입니다. 계열이 60개를 넘으면 목록 없이는 관리가 안 됩니다 — "
+        "반 년 뒤에 `ecos.corp_bbb` 가 뭔지 알 방법이 필요합니다. "
+        "이름은 `config/series.yaml` 에서 읽으므로 코드와 갈라지지 않습니다."
+    )
+
+    cat = catalog_mod.build()
+    if cat.empty:
+        st.info("데이터가 없습니다. `python -m src.etl.run_all` 을 실행하세요.")
+    else:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("계열 수", f"{len(cat):,}")
+        c2.metric("총 관측", f"{cat['관측'].sum():,}")
+        c3.metric("가장 오래된 관측", str(cat["시작"].min()))
+
+        store_pick = st.multiselect("저장소", sorted(cat["저장소"].unique()),
+                                    default=sorted(cat["저장소"].unique()),
+                                    key="cat_store")
+        query = st.text_input("검색 (계열명·이름·출처)", key="cat_q")
+        view = cat[cat["저장소"].isin(store_pick)]
+        if query:
+            mask = view.apply(
+                lambda r: query.lower() in " ".join(map(str, r)).lower(), axis=1)
+            view = view[mask]
+        st.dataframe(view, width="stretch", hide_index=True)
+
+        stale = catalog_mod.staleness(cat, warn_days=7)
+        if not stale.empty:
+            with st.expander(f"7일 이상 갱신 안 된 계열 {len(stale)}건"):
+                st.dataframe(stale[["계열", "이름", "최신", "지연(일)"]],
+                             width="stretch", hide_index=True)
+                st.caption(
+                    "월간 계열(M2·수출·예탁금·신용융자·BSI)은 원래 느립니다 — "
+                    "한국 M2 는 약 2개월 지연 공표됩니다. "
+                    "**일간 계열이 여기 보이면 그건 문제**입니다."
+                )
+
+    st.divider()
+    st.subheader("내려받기")
+    st.caption("엑셀 등에서 따로 보실 때. 대시보드가 읽는 것과 같은 파일입니다.")
+    dl = st.columns(3)
+    for col, name in zip(dl * 2, ["macro", "prices", "flows",
+                                  "vintages", "snapshots"]):
+        df = load(name)
+        if df.empty:
+            continue
+        col.download_button(
+            f"{name}.csv ({len(df):,}행)",
+            df.to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"{name}.csv", mime="text/csv",
+            key=f"dl_{name}", width="stretch")
+    st.caption("한글이 깨지지 않도록 UTF-8 BOM 으로 저장됩니다 (엑셀 호환).")
