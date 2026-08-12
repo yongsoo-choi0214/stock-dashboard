@@ -68,7 +68,23 @@ def clip(s: pd.Series, start: pd.Timestamp) -> pd.Series:
 
 @st.cache_data(ttl=3600)
 def vulnerability_result() -> dict:
-    """취약성 지수 + walk-forward 검증 결과. 계산이 무거워 캐시한다."""
+    """취약성 지수 + walk-forward 검증 결과. 계산이 무거워 캐시한다.
+
+    ★ 예외를 밖으로 던지지 않는다. 이 함수는 상단 요약과 연구 탭 양쪽에서
+    불리는데, 여기서 터지면 **대시보드 전체가 빈 화면**이 된다. 실제로 배포
+    환경에서 그렇게 됐다 — 패널 하나의 실패가 전부를 죽이면 안 된다
+    (설계원칙 5 를 뷰 레이어에도 적용).
+    실패는 삼키지 말고 error 로 담아 화면에 드러낸다.
+    """
+    try:
+        return _vulnerability_result()
+    except Exception as e:
+        import traceback
+        return {"error": f"{type(e).__name__}: {e}",
+                "traceback": traceback.format_exc()}
+
+
+def _vulnerability_result() -> dict:
     macro_, prices_, flows_ = store.read("macro"), store.read("prices"), store.read("flows")
     if macro_.empty or prices_.empty:
         return {}
@@ -240,6 +256,8 @@ if not _kospi.empty:
     _reg = regime.classify(nl, _kospi) if not nl.empty else pd.DataFrame()
     _cur = regime.current(_reg)
     _vres = vulnerability_result()
+    if _vres.get("error"):
+        _vres = {}          # 요약은 취약성 없이도 나머지를 보여준다
     _ff = flows[(flows["market"] == "KOSPI") &
                 (flows["investor"] == "외국인합계")].set_index("date")["net_value"]
     _aa, _k3, _k10 = (macro_series(macro, f"ecos.{x}")
@@ -682,6 +700,14 @@ with tab_res:
     st.subheader("취약성 지수 — 조정 위험 게이지")
 
     vres = vulnerability_result()
+    if vres.get("error"):
+        st.error(f"취약성 지수 계산 실패 — {vres['error']}")
+        with st.expander("자세히"):
+            st.code(vres.get("traceback", ""), language="text")
+        st.caption("이 패널만 실패했고 다른 화면은 정상입니다. "
+                   "배포 환경과 로컬의 패키지 버전이 다르면 이런 일이 생깁니다 — "
+                   "requirements.txt 를 고정해 두었습니다.")
+        vres = {}
     if not vres:
         st.info("취약성 지수를 만들 데이터가 부족합니다.")
     else:

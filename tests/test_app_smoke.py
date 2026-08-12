@@ -18,6 +18,7 @@ from src import store
 APP = str(Path(__file__).resolve().parents[1] / "app.py")
 
 pytest.importorskip("streamlit")
+import streamlit as st  # noqa: E402
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
 TIMEOUT = 180
@@ -96,3 +97,25 @@ def test_works_without_network(has_data, monkeypatch):
     at = _run()
     assert not at.exception, [e.value for e in at.exception]
     assert len(at.metric) >= 1
+
+
+def test_dashboard_survives_vulnerability_failure(has_data, monkeypatch):
+    """★ 패널 하나가 터져도 대시보드 전체가 빈 화면이 되면 안 된다.
+    배포 환경에서 실제로 그렇게 됐다 — 설계원칙 5 를 뷰 레이어에도 적용."""
+    from src.research import vulnerability as vu
+
+    def boom(*a, **kw):
+        raise TypeError("일부러 낸 오류")
+
+    monkeypatch.setattr(vu, "build_components", boom)
+    # 같은 프로세스에서 앞선 테스트가 성공 결과를 캐시해 두면
+    # 함수가 아예 불리지 않아 이 테스트가 무의미해진다
+    st.cache_data.clear()
+    at = _run()
+    assert not at.exception, [e.value for e in at.exception]
+    # 다른 화면은 살아 있어야 한다
+    assert len(at.metric) >= 5
+    labels = [t.label for t in at.tabs]
+    assert "개요" in labels and "데이터" in labels
+    # 실패 사실은 숨기지 않는다
+    assert any("취약성 지수 계산 실패" in e.value for e in at.error)

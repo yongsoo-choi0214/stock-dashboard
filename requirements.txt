@@ -1,13 +1,18 @@
-pandas>=2.2
-numpy>=1.26
-pyarrow>=15.0
-pyyaml>=6.0
-python-dotenv>=1.0
-requests>=2.31
-fredapi>=0.5.2
-pykrx>=1.0.45
-finance-datareader>=0.9.90
-yfinance>=0.2.40
-streamlit>=1.38
-plotly>=5.22
-pytest>=8.0
+# 배포 환경에서만 터지는 문제를 막기 위해 검증된 버전으로 고정한다.
+# 하한만 두면 Streamlit Cloud 가 최신판을 깔아 로컬과 다른 환경이 된다
+# (실제로 pandas 를 2.3.3 로 검증했는데 클라우드는 3.0.5 를 설치했다).
+# 올릴 때는 로컬에서 pytest 를 통과시킨 뒤 이 파일을 갱신할 것.
+
+pandas==2.3.3
+numpy==2.4.6
+pyarrow==24.0.0
+PyYAML==6.0.3
+python-dotenv==1.2.2
+requests==2.34.2
+fredapi==0.5.2
+pykrx==1.2.8
+finance-datareader==0.9.202
+yfinance==1.5.2
+streamlit==1.61.1
+plotly==6.9.0
+pytest==9.1.1
