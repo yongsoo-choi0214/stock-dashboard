@@ -15,6 +15,7 @@ from src.indicators import liquidity as lq
 from src.indicators import technical as ta
 from src.research import ic as ic_mod
 from src.research import regime
+from src.research import snapshot as snapshot_mod
 from src.research import vulnerability as vu
 from src.viz import charts, theme
 
@@ -94,11 +95,20 @@ def vulnerability_result() -> dict:
         s = ms(sid)
         return None if s.empty else s
 
+    def diff(a: str, b: str) -> pd.Series | None:
+        x, y = ms(a), ms(b)
+        return None if x.empty or y.empty else (x - y).dropna()
+
     comp = vu.build_components(
         close, turnover=opt("ecos.kospi_value"),
         foreign_flow=foreign,
         market_cap=opt("ecos.kospi_marcap"),
-        net_liquidity=netliq)
+        net_liquidity=netliq,
+        yield_curve=diff("ecos.ktb10y", "ecos.ktb3y"),
+        exports=opt("ecos.exports"),
+        margin_debt=opt("ecos.margin_debt"),
+        pbr=opt("krx.1001_pbr"),
+        credit_spread=diff("ecos.corp_aa", "ecos.ktb3y"))
     if comp.dropna(how="all").empty:
         return {}
     res = vu.walk_forward(comp, close, horizon=60, split="2016-01-01",
@@ -591,3 +601,25 @@ with tab_res:
             st.dataframe(show.rename(columns={"peak": "고점", "trough": "저점",
                                               "end": "회복", "depth": "낙폭%"}),
                          width="stretch")
+
+    st.divider()
+    st.subheader("기록 이력 — 그날 실제로 뭐라고 했나")
+    snaps = load("snapshots")
+    if snaps.empty:
+        st.info("아직 기록이 없습니다. ETL 이 매 실행마다 그날 값을 남깁니다.")
+    else:
+        wide = snaps.pivot(index="date", columns="metric", values="value")
+        st.dataframe(wide.sort_index(ascending=False).round(3), width="stretch")
+        st.caption(
+            f"{len(wide)}일치 기록. **한번 기록한 날짜는 고치지 않습니다.** "
+            "대시보드의 다른 값은 매번 전체 히스토리에서 다시 계산되므로, "
+            "코드나 방법론이 바뀌면 과거 판단도 함께 바뀝니다 — 실제로 이 프로젝트에서 "
+            "ALFRED 시점 데이터를 넣자 같은 날짜의 성능 수치가 -0.468 에서 -0.304 로 "
+            "움직였습니다. 이 표만이 '그때 정말 뭐라고 했는지'를 남깁니다."
+        )
+        if "vulnerability" in wide.columns and vres:
+            diff = snapshot_mod.compare("vulnerability", vres["index"])
+            if not diff.empty and diff["차이"].abs().max() > 1e-6:
+                st.warning(
+                    f"기록값과 재계산값이 최대 {diff['차이'].abs().max():.3f} "
+                    "차이납니다 — 그 사이 방법론이 바뀌었다는 뜻입니다.")

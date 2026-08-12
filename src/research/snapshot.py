@@ -124,10 +124,19 @@ def collect() -> dict[str, float]:
         s = ms(sid)
         return None if s.empty else s
 
+    def diff(a, b):
+        x, y = ms(a), ms(b)
+        return None if x.empty or y.empty else (x - y).dropna()
+
     comp = vu.build_components(close, turnover=opt("ecos.kospi_value"),
                                foreign_flow=foreign,
                                market_cap=opt("ecos.kospi_marcap"),
-                               net_liquidity=netliq)
+                               net_liquidity=netliq,
+                               yield_curve=diff("ecos.ktb10y", "ecos.ktb3y"),
+                               exports=opt("ecos.exports"),
+                               margin_debt=opt("ecos.margin_debt"),
+                               pbr=opt("krx.1001_pbr"),
+                               credit_spread=diff("ecos.corp_aa", "ecos.ktb3y"))
     idx = vu.build_index(comp).dropna()
     if not idx.empty:
         out["vulnerability"] = float(idx.iloc[-1])

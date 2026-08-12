@@ -37,6 +37,8 @@ def build_registry() -> dict:
         reg["krx_flow"] = KrxFlowFetcher
         from src.etl.krx import KrxAuxFetcher
         reg["krx_aux"] = KrxAuxFetcher
+        from src.etl.krx import KrxFundamentalFetcher
+        reg["krx_fundamental"] = KrxFundamentalFetcher
     except ImportError:
         pass
 

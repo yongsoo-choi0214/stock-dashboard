@@ -171,6 +171,87 @@ ecos:
     unit_out: 조원
     scale: 1.0e-4
 
+  # --- 817Y002 '시장금리(일별)' — 한국 크레딧/커브. 1995~ ---
+  - key: ktb3y
+    name: 국고채 3년
+    stat_code: "817Y002"
+    item_code: "010200000"
+    cycle: D
+    unit_in: 연%
+    unit_out: percent
+    scale: 1.0
+    expect_range: [0.0, 20.0]
+  - key: ktb10y
+    name: 국고채 10년
+    stat_code: "817Y002"
+    item_code: "010210000"
+    cycle: D
+    unit_in: 연%
+    unit_out: percent
+    scale: 1.0
+    expect_range: [0.0, 20.0]
+  - key: corp_aa
+    name: 회사채 3년 AA-
+    stat_code: "817Y002"
+    item_code: "010300000"
+    cycle: D
+    unit_in: 연%
+    unit_out: percent
+    scale: 1.0
+    expect_range: [0.0, 25.0]
+  - key: corp_bbb
+    name: 회사채 3년 BBB-
+    stat_code: "817Y002"
+    item_code: "010320000"
+    cycle: D
+    unit_in: 연%
+    unit_out: percent
+    scale: 1.0
+    expect_range: [0.0, 30.0]
+  - key: cd91
+    name: CD 91일
+    stat_code: "817Y002"
+    item_code: "010502000"
+    cycle: D
+    unit_in: 연%
+    unit_out: percent
+    scale: 1.0
+    expect_range: [0.0, 20.0]
+
+  # 신용융자 잔고 — 빚내서 산 돈. 조정을 증폭시킨다. 예탁금과 같은 테이블.
+  - key: margin_debt
+    name: 신용융자 잔고
+    stat_code: "901Y056"
+    item_code: "S23E"
+    cycle: M
+    unit_in: 원
+    unit_out: 조원
+    scale: 1.0e-12
+    expect_range: [0.1, 200.0]
+
+  # 수출 — KOSPI 이익의 선행지표
+  - key: exports
+    name: 수출금액(월)
+    stat_code: "901Y118"
+    item_code: "T002"
+    cycle: M
+    unit_in: 천불
+    unit_out: 십억불
+    scale: 1.0e-6
+    expect_range: [5.0, 200.0]
+
+  # 기업경기실사지수 — 2차 항목(Group2) 필요. 100 미만이면 비관 우위
+  - key: bsi
+    name: 전산업 업황실적 BSI
+    stat_code: "512Y013"
+    item_code: "99988"
+    item_code2: "AA"
+    cycle: M
+    unit_in: index
+    unit_out: index
+    scale: 1.0
+    expect_range: [20.0, 150.0]
+
 krx_index:
   - ticker: "1001"
     name: KOSPI
@@ -188,3 +269,20 @@ yfinance:
     name: VIX
   - ticker: "DX-Y.NYB"
     name: 달러인덱스
+
+  # --- 글로벌 연동 자산 (전부 2005년부터 확인) ---
+  - ticker: "^SOX"
+    name: 필라델피아 반도체
+  - ticker: "000001.SS"
+    name: 상해종합
+  - ticker: "^N225"
+    name: 닛케이225
+  - ticker: "^HSI"
+    name: 항셍
+  - ticker: "EEM"
+    name: 신흥국 ETF
+  - ticker: "HG=F"
+    name: 구리
+  - ticker: "CL=F"
+    name: WTI 유가
+

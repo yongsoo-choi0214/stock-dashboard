@@ -89,9 +89,13 @@ def parse_time(s: str, cycle: str) -> pd.Timestamp:
 # ------------------------------------------------------------------ 수집
 @retry(times=3)
 def _search_page(stat: str, cycle: str, start: str, end: str, item: str,
-                 offset: int) -> tuple[list[dict], int]:
+                 offset: int, item2: str = "") -> tuple[list[dict], int]:
     path = (f"StatisticSearch/{settings.ECOS_API_KEY}/json/kr/"
             f"{offset + 1}/{offset + PAGE}/{stat}/{cycle}/{start}/{end}/{item}")
+    if item2:
+        # 2차 항목(Group2)이 있는 통계표는 이걸 줘야 TIME 이 유일해진다.
+        # 예: 기업경기조사 = 업종(Group1) × BSI 종류(Group2)
+        path += f"/{item2}"
     js = _get(path)
 
     if "RESULT" in js:
@@ -105,13 +109,14 @@ def _search_page(stat: str, cycle: str, start: str, end: str, item: str,
 
 
 def fetch_series(stat: str, cycle: str, item: str,
-                 start: pd.Timestamp, end: pd.Timestamp) -> pd.Series:
+                 start: pd.Timestamp, end: pd.Timestamp,
+                 item2: str = "") -> pd.Series:
     """한 시리즈 전체를 페이지네이션으로 받아 Series 로 반환."""
     s_str, e_str = fmt_time(start, cycle), fmt_time(end, cycle)
     rows: list[dict] = []
     offset = 0
     while True:
-        page, total = _search_page(stat, cycle, s_str, e_str, item, offset)
+        page, total = _search_page(stat, cycle, s_str, e_str, item, offset, item2)
         rows.extend(page)
         offset += PAGE
         time.sleep(SLEEP)
@@ -154,7 +159,8 @@ class EcosFetcher(Fetcher):
                 continue
 
             try:
-                s = fetch_series(stat, cycle, code, start, end)
+                s = fetch_series(stat, cycle, code, start, end,
+                                 str(item.get("item_code2", "") or ""))
             except Exception as e:
                 # 한 시리즈의 실패가 전체를 죽이지 않는다 (설계원칙 5)
                 print(f"  [{key}] FAIL {type(e).__name__}: {e}")

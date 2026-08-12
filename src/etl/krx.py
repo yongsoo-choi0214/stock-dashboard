@@ -202,3 +202,84 @@ class KrxAuxFetcher(Fetcher):
         if not frames:
             return pd.DataFrame(columns=["date", "series_id", "value"])
         return pd.concat(frames, ignore_index=True)
+
+
+class KrxFundamentalFetcher(Fetcher):
+    """지수 밸류에이션 — PER / PBR / 배당수익률. KRX_ID/KRX_PW 필요.
+
+    시가총액은 있었지만 **이익 대비가 없어** '비싼가'를 판단할 근거가 없었다.
+    밸류에이션은 조정의 고전적 설명변수다.
+
+    pykrx get_index_fundamental 은 로그인이 필요하고 스크래핑이라 비싸다
+    → full_refresh 없이 lookback 증분으로 돈다.
+    """
+
+    source, target, keys = "krx_fundamental", "macro", ["date", "series_id"]
+
+    COLMAP = {"PER": "per", "PBR": "pbr", "배당수익률": "divyield"}
+    PREFIX = "krx."          # 이 fetcher 가 소유한 series_id 접두사
+    SUFFIXES = ("_per", "_pbr", "_divyield")
+
+    def start_from(self, lookback_days: int) -> pd.Timestamp:
+        """★ 기본 구현은 macro 테이블 **전체**의 최신일을 본다.
+
+        macro 에는 다른 소스가 매일 넣는 계열이 많아, 이 fetcher 가 처음
+        도는 날에도 '최신일 - 30일'로 잡혀 한 달치만 받게 된다.
+        자기 계열만 보고 판단해야 첫 수집에서 전체 히스토리를 가져온다.
+        """
+        from src import store
+
+        df = store.read(self.target)
+        if df.empty:
+            return pd.Timestamp(settings.DEFAULT_START)
+        mine = df[df["series_id"].str.startswith(self.PREFIX)
+                  & df["series_id"].str.endswith(self.SUFFIXES)]
+        if mine.empty:
+            return pd.Timestamp(settings.DEFAULT_START)
+        return pd.Timestamp(mine["date"].max()) - pd.Timedelta(days=lookback_days)
+
+    def fetch(self, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+        if not (os.getenv("KRX_ID") and os.getenv("KRX_PW")):
+            raise RuntimeError(
+                "KRX_ID/KRX_PW 가 없어 밸류에이션을 받을 수 없습니다 "
+                "(docs/SETUP_KEYS.md).")
+        from pykrx import stock
+
+        frames: list[pd.DataFrame] = []
+        for item in settings.series_for("krx_index"):
+            code = str(item["ticker"])
+            got = 0
+            for s, e in _yearly_chunks(start, end):
+                try:
+                    raw = stock.get_index_fundamental(
+                        s.strftime("%Y%m%d"), e.strftime("%Y%m%d"), code)
+                except Exception as ex:
+                    print(f"  [{code}] {s.date()}~{e.date()} "
+                          f"FAIL {type(ex).__name__}: {ex}")
+                    continue
+                finally:
+                    time.sleep(settings.KRX_SLEEP)
+                if raw is None or raw.empty:
+                    continue
+
+                idx = pd.to_datetime(raw.index)
+                for col, suffix in self.COLMAP.items():
+                    if col not in raw.columns:
+                        continue
+                    v = pd.to_numeric(raw[col], errors="coerce")
+                    # PER 0 은 '적자라 산출 불가'를 뜻한다. 값이 아니라 결측이다.
+                    v = v.where(v > 0)
+                    v = v.dropna()
+                    if v.empty:
+                        continue
+                    frames.append(pd.DataFrame({
+                        "date": idx[raw.index.isin(v.index)].normalize(),
+                        "series_id": f"krx.{code}_{suffix}",
+                        "value": v.to_numpy(dtype="float64"),
+                    }))
+                    got += len(v)
+            print(f"  [krx.{code}] {got}행")
+
+        if not frames:
+            return pd.DataFrame(columns=["date", "series_id", "value"])
+        return pd.concat(frames, ignore_index=True)
