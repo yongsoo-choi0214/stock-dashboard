@@ -311,3 +311,64 @@ def vulnerability_panel(index: pd.Series, close: pd.Series, ep: pd.DataFrame,
     fig.update_yaxes(title_text="취약성", range=[0, 1], row=2, col=1)
     fig.update_layout(title="취약성 지수 — 음영은 -15% 이상 조정 구간(고점→저점)")
     return theme.apply(fig, mode, height=620)
+
+
+def macro_lines(series: dict[str, pd.Series], title: str, *,
+                mode: str = "light", ylabel: str = "",
+                zero_line: bool = False, height: int = 400,
+                hover_fmt: str = ":,.2f") -> go.Figure:
+    """여러 계열을 한 축에 그린다. 단위가 같은 것끼리만 묶을 것.
+
+    금리처럼 단위가 같은 계열은 한 축이 맞다. 단위가 다르면 상하 분할이나
+    지수화를 써야 한다 — 이중축은 쓰지 않는다.
+    """
+    p = theme.palette(mode)
+    fig = go.Figure()
+    for i, (name, s) in enumerate(series.items()):
+        s = s.dropna()
+        if s.empty:
+            continue
+        fig.add_trace(go.Scatter(
+            x=s.index, y=s, name=name, mode="lines",
+            line=dict(color=p["series"][i % len(p["series"])], width=2),
+            hovertemplate="%{y" + hover_fmt + "}<extra>" + name + "</extra>"))
+    if zero_line:
+        fig.add_hline(y=0, line=dict(color=p["axis"], width=1))
+    if ylabel:
+        fig.update_yaxes(title_text=ylabel)
+    fig.update_layout(title=title)
+    return theme.apply(fig, mode, height=height)
+
+
+def level_with_percentile(s: pd.Series, title: str, *, mode: str = "light",
+                          window: int = 252, ylabel: str = "",
+                          height: int = 480) -> go.Figure:
+    """상단 원계열 + 하단 롤링 백분위.
+
+    레벨만 보면 '지금 비싼가'를 판단할 수 없다. PER 17 이 비싼지 싼지는
+    그 시장의 역사와 비교해야 나오고, 백분위가 그 비교를 대신한다.
+    """
+    from src.indicators.technical import pct_rank
+
+    p = theme.palette(mode)
+    s = s.dropna()
+    pr = pct_rank(s.rename("x"), window)
+
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        row_heights=[0.6, 0.4], vertical_spacing=0.07)
+    fig.add_trace(go.Scatter(x=s.index, y=s, name=title, mode="lines",
+                             line=dict(color=p["series"][0], width=2),
+                             hovertemplate="%{y:,.2f}<extra></extra>"),
+                  row=1, col=1)
+    fig.add_trace(go.Scatter(x=pr.index, y=pr, name="백분위", mode="lines",
+                             line=dict(color=p["series"][1], width=2),
+                             hovertemplate="%{y:.0%}<extra>백분위</extra>"),
+                  row=2, col=1)
+    for y in (0.2, 0.8):
+        fig.add_hline(y=y, line=dict(color=p["muted"], width=1, dash="dash"),
+                      row=2, col=1)
+    fig.update_yaxes(title_text=ylabel or "값", row=1, col=1)
+    fig.update_yaxes(title_text=f"{window}일 백분위", range=[0, 1], row=2, col=1)
+    # 계열이 2개(원계열·백분위)라 범례를 남긴다 — 색만으로 구분하게 두지 않는다
+    fig.update_layout(title=title)
+    return theme.apply(fig, mode, height=height)

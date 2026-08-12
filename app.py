@@ -269,6 +269,47 @@ with tab_kr:
                                                title=f"{names[pick]} 이격도"),
                         width="stretch")
 
+        # --- 밸류에이션 --------------------------------------------------
+        code = pick.split(".")[1]
+        per = macro_series(macro, f"krx.{code}_per")
+        pbr = macro_series(macro, f"krx.{code}_pbr")
+        dvy = macro_series(macro, f"krx.{code}_divyield")
+        mcap = macro_series(macro, f"krx.{code}_marcap")
+
+        if per.empty and pbr.empty:
+            st.info("밸류에이션 데이터가 없습니다. "
+                    "`python -m src.etl.run_all --only krx_fundamental`")
+        else:
+            st.subheader("밸류에이션")
+            v1, v2, v3, v4 = st.columns(4)
+            for col, s_, label, fmt in [(v1, per, "PER", "{:.2f}"),
+                                        (v2, pbr, "PBR", "{:.2f}"),
+                                        (v3, dvy, "배당수익률", "{:.2f}%"),
+                                        (v4, mcap, "시가총액", "{:,.0f}조원")]:
+                if s_.empty:
+                    continue
+                pr = ta.pct_rank(s_.rename("x"), 252).dropna()
+                col.metric(label, fmt.format(s_.iloc[-1]),
+                           f"{pr.iloc[-1]:.0%} 분위" if not pr.empty else None,
+                           delta_color="off")
+
+            metric = st.radio("지표", ["PER", "PBR", "배당수익률"],
+                              horizontal=True, key="valuation_pick")
+            chosen = {"PER": per, "PBR": pbr, "배당수익률": dvy}[metric]
+            if chosen.empty:
+                st.info(f"{metric} 데이터가 없습니다.")
+            else:
+                st.plotly_chart(
+                    charts.level_with_percentile(
+                        clip(chosen, start), f"{names[pick]} {metric}",
+                        mode=mode, ylabel=metric),
+                    width="stretch")
+                st.caption(
+                    "하단은 252일 롤링 백분위입니다. **레벨만 보면 비싼지 알 수 없습니다** — "
+                    f"{metric} 값 자체보다 '그 시장의 역사에서 지금이 어디쯤인가'가 "
+                    "판단에 쓰입니다. PBR 은 취약성 지수의 컴포넌트이기도 합니다."
+                )
+
     st.subheader("한국 유동성")
     dep = clip(macro_series(macro, "ecos.investor_deposit"), start)
     mcap = clip(macro_series(macro, "ecos.kospi_marcap"), start)
@@ -366,11 +407,95 @@ with tab_liq:
         st.caption("순유동성 = 연준 총자산 − 재무부 일반계정(TGA) − 역레포(ON RRP), "
                    "수요일 기준 주간 정렬. 단위 십억 USD.")
 
+    # --- 한국 금리·크레딧 ---------------------------------------------
+    st.divider()
+    st.subheader("한국 금리 · 크레딧")
+    ktb3 = macro_series(macro, "ecos.ktb3y")
+    if ktb3.empty:
+        st.info("한국 금리 데이터가 없습니다. `run_all --only ecos`")
+    else:
+        rates = {n: clip(macro_series(macro, k), start) for k, n in [
+            ("ecos.ktb3y", "국고채 3년"), ("ecos.ktb10y", "국고채 10년"),
+            ("ecos.corp_aa", "회사채 AA-"), ("ecos.corp_bbb", "회사채 BBB-"),
+            ("ecos.cd91", "CD 91일"), ("ecos.base_rate", "기준금리")]}
+        st.plotly_chart(
+            charts.macro_lines({k: v for k, v in rates.items() if not v.empty},
+                               "한국 금리 (연%)", mode=mode, ylabel="연%",
+                               height=420),
+            width="stretch")
+
+        aa, bbb, k10 = (macro_series(macro, f"ecos.{x}")
+                        for x in ("corp_aa", "corp_bbb", "ktb10y"))
+        # ★ BBB- 는 수준이 한 자릿수 %p 로 AA-·장단기(0~2%p)와 자릿수가 다르다.
+        #   한 축에 올리면 나머지가 바닥에 눌려 움직임이 안 보인다 — 따로 그린다.
+        tight = {}
+        if not aa.empty:
+            tight["신용스프레드 (AA- − 국고3)"] = clip((aa - ktb3).dropna(), start)
+        if not k10.empty:
+            tight["장단기 (10년 − 3년)"] = clip((k10 - ktb3).dropna(), start)
+        if tight:
+            st.plotly_chart(
+                charts.macro_lines(tight, "한국 스프레드 (%p)", mode=mode,
+                                   ylabel="%p", zero_line=True, height=380),
+                width="stretch")
+            st.caption(
+                "현재 " + " · ".join(f"{k.split('(')[0].strip()} {v.iloc[-1]:+.2f}%p"
+                                    for k, v in tight.items() if not v.empty)
+                + ". **장단기가 0 아래면 역전**이며 취약성 지수의 컴포넌트입니다. "
+                  "신용스프레드(AA-) 확대는 우량 기업의 자금조달 스트레스를 뜻합니다."
+            )
+        if not bbb.empty:
+            bs = clip((bbb - ktb3).dropna(), start)
+            st.plotly_chart(
+                charts.macro_lines({"저신용 스프레드 (BBB- − 국고3)": bs},
+                                   "저신용 스프레드 (%p)", mode=mode,
+                                   ylabel="%p", height=340),
+                width="stretch")
+            st.caption(
+                f"현재 {bs.iloc[-1]:.2f}%p. BBB- 는 거래가 얇아 스프레드가 "
+                "구조적으로 큽니다(6%p대). 위 차트와 자릿수가 달라 따로 그립니다 — "
+                "같은 축에 올리면 AA-·장단기가 바닥에 눌려 안 보입니다."
+            )
+
+    # --- 실물 -----------------------------------------------------------
+    exports, bsi = macro_series(macro, "ecos.exports"), macro_series(macro, "ecos.bsi")
+    if not exports.empty or not bsi.empty:
+        st.divider()
+        st.subheader("실물 — 수출 · 기업체감")
+        e1, e2 = st.columns(2)
+        if not exports.empty:
+            yoy = (exports.pct_change(12) * 100).dropna()
+            e1.metric("수출 YoY", f"{yoy.iloc[-1]:+.1f}%",
+                      f"{exports.iloc[-1]:,.1f}십억불")
+            st.plotly_chart(
+                charts.macro_lines({"수출 YoY": clip(yoy, start)},
+                                   "수출 전년동월비 (%)", mode=mode, ylabel="%",
+                                   zero_line=True, height=340),
+                width="stretch")
+        if not bsi.empty:
+            e2.metric("전산업 BSI", f"{bsi.iloc[-1]:.0f}",
+                      "100 미만 = 비관 우위", delta_color="off")
+            st.plotly_chart(
+                charts.macro_lines({"전산업 업황실적 BSI": clip(bsi, start)},
+                                   "기업경기실사지수", mode=mode, ylabel="지수",
+                                   height=340),
+                width="stretch")
+            st.caption("BSI 100 이 중립입니다. 수출 YoY 는 취약성 지수의 컴포넌트입니다.")
+
+    st.divider()
     others = {"fred.DFF": "연방기금 실효금리", "fred.T10Y2Y": "미 10Y-2Y",
+              "fred.T10Y3M": "미 10Y-3M", "fred.BAA10Y": "무디스 Baa 스프레드",
+              "fred.AAA10Y": "무디스 Aaa 스프레드",
               "fred.BAMLH0A0HYM2": "하이일드 OAS (3년치만 공개)",
               "fred.M2SL": "미국 M2",
               "ecos.base_rate": "한국은행 기준금리", "ecos.m2": "한국 M2(평잔)",
-              "ecos.usdkrw": "원/달러 환율"}
+              "ecos.usdkrw": "원/달러 환율",
+              "ecos.kospi_marcap": "유가증권 시가총액(조원)",
+              "ecos.kospi_value": "유가증권 거래대금(조원)",
+              "ecos.kosdaq_value": "코스닥 거래대금(조원)",
+              "ecos.foreign_net_kosdaq": "외국인 순매수(코스닥, 조원)",
+              "ecos.margin_debt": "신용융자 잔고(조원)",
+              "krx.2001_marcap": "코스닥 시가총액(조원)"}
     have = {k: v for k, v in others.items() if not macro_series(macro, k).empty}
     if have:
         pick = st.selectbox("기타 매크로", list(have), format_func=lambda k: have[k])
