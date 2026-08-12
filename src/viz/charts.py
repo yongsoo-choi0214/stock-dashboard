@@ -372,3 +372,60 @@ def level_with_percentile(s: pd.Series, title: str, *, mode: str = "light",
     # 계열이 2개(원계열·백분위)라 범례를 남긴다 — 색만으로 구분하게 두지 않는다
     fig.update_layout(title=title)
     return theme.apply(fig, mode, height=height)
+
+
+def correlation_heatmap(corr: pd.DataFrame, *, mode: str = "light",
+                        labels: dict[str, str] | None = None,
+                        height: int = 560) -> go.Figure:
+    """상관행렬 히트맵.
+
+    상관은 -1~+1 의 **극성** 데이터라 발산형(diverging) 배색을 쓴다 —
+    두 색 + 중립 회색 중간값. 무지개 배색은 없는 경계를 만들어낸다.
+    """
+    p = theme.palette(mode)
+    neg, mid, pos = p["series"][0], p["grid"], p["series"][7]
+    names = [labels.get(c, c) if labels else c for c in corr.columns]
+
+    fig = go.Figure(go.Heatmap(
+        z=corr.values, x=names, y=names,
+        zmin=-1, zmax=1, zmid=0,
+        colorscale=[[0.0, neg], [0.5, mid], [1.0, pos]],
+        colorbar=dict(title="상관", tickformat=".1f",
+                      outlinewidth=0, thickness=14),
+        hovertemplate="%{y} ↔ %{x}<br>상관 %{z:.2f}<extra></extra>",
+        # 셀 사이 간격 — 인접한 값이 번져 보이지 않게
+        xgap=2, ygap=2,
+    ))
+    # 값이 많지 않으므로 숫자를 직접 얹는다(색만으로 읽게 두지 않는다)
+    if len(corr) <= 16:
+        fig.update_traces(text=corr.round(2).values, texttemplate="%{text}",
+                          textfont=dict(size=10))
+    fig.update_layout(title="일간 수익률 상관", showlegend=False)
+    fig.update_xaxes(showgrid=False, tickangle=-45)
+    fig.update_yaxes(showgrid=False, autorange="reversed")
+    return theme.apply(fig, mode, height=height)
+
+
+def monthly_seasonality(stats: pd.DataFrame, *, mode: str = "light",
+                        height: int = 420) -> go.Figure:
+    """월별 평균 수익률 막대 + 상승확률 점."""
+    p = theme.palette(mode)
+    pos, neg = p["series"][0], p["series"][7]
+    fig = make_subplots(specs=[[{"secondary_y": False}]])
+
+    fig.add_trace(go.Bar(
+        x=list(stats.index), y=stats["평균%"], name="평균 수익률",
+        marker=dict(color=[pos if v >= 0 else neg for v in stats["평균%"]],
+                    line=dict(width=0)),
+        hovertemplate="%{y:.2f}%<extra>평균</extra>"))
+    fig.add_trace(go.Scatter(
+        x=list(stats.index), y=(stats["상승확률%"] - 50) / 10,
+        name="상승확률 (50% 기준 편차, 우측 눈금 아님)", mode="markers",
+        marker=dict(color=p["series"][3], size=10, line=dict(width=0)),
+        hovertemplate="%{customdata:.0f}%<extra>상승확률</extra>",
+        customdata=stats["상승확률%"]))
+
+    fig.add_hline(y=0, line=dict(color=p["axis"], width=1))
+    fig.update_yaxes(title_text="월 평균 수익률 (%)")
+    fig.update_layout(title="월별 계절성", bargap=0.25)
+    return theme.apply(fig, mode, height=height)

@@ -15,6 +15,7 @@ from src.indicators import liquidity as lq
 from src.indicators import technical as ta
 from src.research import ic as ic_mod
 from src.research import regime
+from src.research import seasonality as sea
 from src.research import catalog as catalog_mod
 from src.research import snapshot as snapshot_mod
 from src.research import summary
@@ -561,10 +562,29 @@ with tab_x:
         f.update_layout(title="상대 성과 (시작 = 100)")
         st.plotly_chart(theme.apply(f, mode, height=460), width="stretch")
 
-        corr = pd.DataFrame({names[t]: clip(close_of(prices, t), start)
-                             for t in picks}).pct_change(fill_method=None).corr()
         st.subheader("일간 수익률 상관")
-        st.dataframe(corr.style.format("{:.2f}"), width="stretch")
+        align = st.checkbox(
+            "시차 정렬 (미국 자산을 하루 늦춤)", value=True, key="corr_align",
+            help="한국장은 15:30 에 닫고 미국장은 그 뒤에 열립니다. 같은 날짜끼리 "
+                 "비교하면 한국이 아직 모르는 정보와 짝지어져 관계가 과소평가됩니다.")
+        corr = sea.correlation(prices, sorted(prices["ticker"].unique()),
+                               start=start, align_sessions=align)
+        if corr.empty:
+            st.info("상관을 낼 공통 거래일이 부족합니다. 기간을 늘리세요.")
+        else:
+            st.plotly_chart(charts.correlation_heatmap(corr, mode=mode,
+                                                       labels=names),
+                            width="stretch")
+            ks = corr.loc["KRX.1001"].drop("KRX.1001").sort_values(ascending=False)
+            st.caption(
+                "KOSPI 와 가장 높은 셋: "
+                + " · ".join(f"{names.get(t, t)} {v:.2f}" for t, v in ks.head(3).items())
+                + f" / 가장 낮은 하나: {names.get(ks.index[-1], ks.index[-1])} "
+                  f"{ks.iloc[-1]:.2f}. "
+                  "**시차 정렬을 끄면 미국 자산의 상관이 크게 낮아집니다** — "
+                  "실측 SOX 0.40→0.15, S&P500 0.34→0.11. 같은 시간대인 닛케이·항셍은 "
+                  "정렬 여부와 무관하게 그대로입니다."
+            )
 
 with tab_res:
     st.caption(
@@ -757,6 +777,56 @@ with tab_res:
                          width="stretch")
 
     st.divider()
+    st.subheader("변동성 레짐")
+    _k = close_of(prices, "KRX.1001")
+    if _k.empty:
+        st.info("KOSPI 데이터가 없습니다.")
+    else:
+        rv, rv_pr = sea.current_vol_percentile(_k)
+        vstats = sea.vol_regime_stats(_k, horizon=60)
+        v1, v2 = st.columns(2)
+        v1.metric("20일 실현변동성 (연율)", f"{rv:.1%}",
+                  f"{rv_pr:.0%} 분위" if rv_pr == rv_pr else None, delta_color="off")
+        if not vstats.empty:
+            hi = vstats["변동성 상한%"].iloc[-1]
+            v2.metric("과거 최고 분위 상한", f"{hi:.1f}%",
+                      "표본 범위 밖" if rv * 100 > hi else "표본 범위 안",
+                      delta_color="off")
+            st.dataframe(vstats, width="stretch")
+            st.caption(
+                "실현변동성 5분위별 **향후 60일 수익률**입니다. 과거에는 "
+                "변동성이 높을수록 이후 수익률이 좋았습니다(공포 뒤 되돌림). "
+                "다만 표본이 겹치므로 서술 통계로만 보세요."
+            )
+            if rv * 100 > hi:
+                st.warning(
+                    f"현재 변동성 {rv:.1%} 는 과거 최고 분위의 상한 {hi:.1f}% 를 "
+                    "넘습니다. **표본 밖 구간이라 위 표를 그대로 적용하면 안 됩니다** — "
+                    "'과거에 이랬으니 이번에도'가 가장 위험한 구간입니다."
+                )
+
+    st.divider()
+    st.subheader("월별 계절성")
+    if not _k.empty:
+        mstats = sea.monthly_stats(_k)
+        if mstats.empty:
+            st.info("계절성을 낼 표본이 부족합니다.")
+        else:
+            st.plotly_chart(charts.monthly_seasonality(mstats, mode=mode),
+                            width="stretch")
+            st.dataframe(mstats, width="stretch")
+            worst = mstats["평균%"].idxmin()
+            best = mstats["평균%"].idxmax()
+            st.caption(
+                f"2005년 이후 KOSPI 기준. 가장 나쁜 달 **{worst}** "
+                f"({mstats.loc[worst, '평균%']:+.2f}%, 상승확률 "
+                f"{mstats.loc[worst, '상승확률%']:.0f}%), 가장 좋은 달 **{best}** "
+                f"({mstats.loc[best, '평균%']:+.2f}%). "
+                "**월당 표본이 21~22개뿐입니다** — 평균보다 상승확률과 표본 수를 "
+                "함께 보시고, 매매 규칙으로 쓰지 마세요."
+            )
+
+    st.divider()
     st.subheader("기록 이력 — 그날 실제로 뭐라고 했나")
     snaps = load("snapshots")
     if snaps.empty:
@@ -832,3 +902,4 @@ with tab_data:
             file_name=f"{name}.csv", mime="text/csv",
             key=f"dl_{name}", width="stretch")
     st.caption("한글이 깨지지 않도록 UTF-8 BOM 으로 저장됩니다 (엑셀 호환).")
+
