@@ -221,3 +221,26 @@ GitHub Actions 가 자동으로 돌리고, 데이터가 바뀌면 대시보드�
 .venv/Scripts/python.exe -m src.alerts.run --dry-run  # 지금 뭐가 울릴지
 .venv/Scripts/python.exe -m pytest -q               # 전체 검증
 ```
+
+---
+
+## 8. 개발 시 주의 — data/ 를 되돌리지 않기
+
+GitHub Actions 가 `data/*.parquet` 을 커밋합니다. 로컬 작업 중 rebase 충돌이
+나면 parquet 은 텍스트 병합이 안 되므로 한쪽을 골라야 하는데, **잘못 고르면
+서버가 받아둔 최신 데이터를 조용히 되돌립니다.**
+
+실제로 그렇게 됐습니다 — 대시보드가 사흘 낡은 KOSPI(6,579)를 보여줬고,
+서버에는 이미 6,813 이 있었습니다.
+
+```
+rebase 중:  --ours = 이미 적용된 쪽(원격)   --theirs = 지금 얹는 쪽(내 것)
+merge  중:  --ours = 현재 브랜치            --theirs = 병합 대상
+```
+
+**헷갈리므로 고르지 말고 다시 수집하세요.**
+
+```bash
+python scripts/check_data_freshness.py   # 로컬이 원격보다 낡았나
+python -m src.etl.run_all                # 낡았으면 다시 수집
+```
