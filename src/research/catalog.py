@@ -39,6 +39,10 @@ def _declared_names() -> dict[str, str]:
         out[f"ecos.{item['key']}"] = item["name"]
     for item in settings.series_for("krx_index"):
         out[f"KRX.{item['ticker']}"] = item["name"]
+    # 규모·업종 지수. 빠뜨리면 카탈로그에 이름 없는 계열이 생긴다
+    for item in settings.series_for("krx_sector"):
+        grp = "규모" if item.get("group") == "size" else "업종"
+        out[f"KRX.{item['ticker']}"] = f"{item['name']} ({grp})"
     for item in settings.series_for("yfinance"):
         out[f"YF.{item['ticker']}"] = item["name"]
     return out

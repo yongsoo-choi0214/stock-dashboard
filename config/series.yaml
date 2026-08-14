@@ -217,6 +217,17 @@ ecos:
     unit_out: percent
     scale: 1.0
     expect_range: [0.0, 20.0]
+  # CP - CD 스프레드는 단기자금 경색의 고전적 신호다.
+  # 두 금리 모두 91일물이라 신용위험 차이만 남는다.
+  - key: cp91
+    name: CP 91일
+    stat_code: "817Y002"
+    item_code: "010503000"
+    cycle: D
+    unit_in: 연%
+    unit_out: percent
+    scale: 1.0
+    expect_range: [0.0, 25.0]
 
   # 신용융자 잔고 — 빚내서 산 돈. 조정을 증폭시킨다. 예탁금과 같은 테이블.
   - key: margin_debt
@@ -286,3 +297,148 @@ yfinance:
   - ticker: "CL=F"
     name: WTI 유가
 
+
+# 코스피 규모별·업종별 지수 — 시장 폭(breadth) 계산용.
+# 지수는 pykrx 로 받는다(FDR 은 업종지수를 주지 않는다).
+krx_sector:
+  - ticker: "1002"
+    name: 코스피 대형주
+    group: size
+  - ticker: "1003"
+    name: 코스피 중형주
+    group: size
+  - ticker: "1004"
+    name: 코스피 소형주
+    group: size
+  - ticker: "1005"
+    name: 음식료·담배
+    group: sector
+  - ticker: "1006"
+    name: 섬유·의류
+    group: sector
+  - ticker: "1007"
+    name: 종이·목재
+    group: sector
+  - ticker: "1008"
+    name: 화학
+    group: sector
+  - ticker: "1009"
+    name: 제약
+    group: sector
+  - ticker: "1010"
+    name: 비금속
+    group: sector
+  - ticker: "1011"
+    name: 금속
+    group: sector
+  - ticker: "1012"
+    name: 기계·장비
+    group: sector
+  - ticker: "1013"
+    name: 전기전자
+    group: sector
+  - ticker: "1014"
+    name: 의료·정밀기기
+    group: sector
+  - ticker: "1015"
+    name: 운송장비·부품
+    group: sector
+  - ticker: "1016"
+    name: 유통
+    group: sector
+  - ticker: "1017"
+    name: 전기·가스
+    group: sector
+  - ticker: "1018"
+    name: 건설
+    group: sector
+  - ticker: "1019"
+    name: 운송·창고
+    group: sector
+  - ticker: "1020"
+    name: 통신
+    group: sector
+  - ticker: "1021"
+    name: 금융
+    group: sector
+  - ticker: "1024"
+    name: 증권
+    group: sector
+  - ticker: "1025"
+    name: 보험
+    group: sector
+  - ticker: "1026"
+    name: 일반서비스
+    group: sector
+  - ticker: "1027"
+    name: 제조
+    group: sector
+  - ticker: "1034"
+    name: 코스피 100
+    group: sector
+  - ticker: "1045"
+    name: 부동산
+    group: sector
+  - ticker: "1046"
+    name: IT 서비스
+    group: sector
+  - ticker: "1047"
+    name: 오락·문화
+    group: sector
+  - ticker: "1150"
+    name: 코스피 200 커뮤니케이션서비스
+    group: sector
+  - ticker: "1151"
+    name: 코스피 200 건설
+    group: sector
+  - ticker: "1152"
+    name: 코스피 200 중공업
+    group: sector
+  - ticker: "1153"
+    name: 코스피 200 철강/소재
+    group: sector
+  - ticker: "1154"
+    name: 코스피 200 에너지/화학
+    group: sector
+  - ticker: "1155"
+    name: 코스피 200 정보기술
+    group: sector
+  - ticker: "1156"
+    name: 코스피 200 금융
+    group: sector
+  - ticker: "1157"
+    name: 코스피 200 생활소비재
+    group: sector
+  - ticker: "1158"
+    name: 코스피 200 경기소비재
+    group: sector
+  - ticker: "1159"
+    name: 코스피 200 산업재
+    group: sector
+  - ticker: "1160"
+    name: 코스피 200 헬스케어
+    group: sector
+  - ticker: "1167"
+    name: 코스피 200 중소형주
+    group: sector
+  - ticker: "1168"
+    name: 코스피 200 경기방어소비재지수
+    group: sector
+  - ticker: "1182"
+    name: 코스피 200 초대형제외 지수
+    group: sector
+  - ticker: "1224"
+    name: 코스피 200 비중상한 30%
+    group: sector
+  - ticker: "1227"
+    name: 코스피 200 비중상한 25%
+    group: sector
+  - ticker: "1232"
+    name: 코스피 200 비중상한 20%
+    group: sector
+  - ticker: "1244"
+    name: 코스피200제외 코스피지수
+    group: sector
+  - ticker: "1894"
+    name: 코스피 200 TOP 10
+    group: sector

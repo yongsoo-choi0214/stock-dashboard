@@ -21,8 +21,13 @@ from src.etl.base import Fetcher, retry
 # §3.2 의 KRX 코드 → FinanceDataReader 심볼
 FDR_SYMBOL = {"1001": "KS11", "2001": "KQ11", "1028": "KS200"}
 
+#: FinanceDataReader 는 영문 컬럼을 준다
 COLMAP = {"Open": "open", "High": "high", "Low": "low",
           "Close": "close", "Volume": "volume"}
+
+#: pykrx 는 한글 컬럼을 준다. 둘을 섞어 쓰면 조용히 KeyError 가 난다.
+KRX_COLMAP = {"시가": "open", "고가": "high", "저가": "low",
+              "종가": "close", "거래량": "volume"}
 
 
 @retry(times=3)
@@ -282,4 +287,99 @@ class KrxFundamentalFetcher(Fetcher):
 
         if not frames:
             return pd.DataFrame(columns=["date", "series_id", "value"])
+        return pd.concat(frames, ignore_index=True)
+
+
+class KrxSectorFetcher(Fetcher):
+    """코스피 규모별·업종별 지수 — 시장 폭(breadth) 계산용. KRX 로그인 필요.
+
+    **왜 전종목이 아니라 지수인가.** 폭을 정확히 재려면 942개 종목 전부가
+    필요하지만 20년치면 5백만 행이라 커밋할 크기가 아니다(CLAUDE.md §2).
+    업종 44개 + 규모 3개면 25만 행으로 '몇 %의 업종이 추세 위인가',
+    '소형주가 대형주 대비 어떤가'를 만들 수 있다. 정밀도를 조금 내주고
+    저장 비용을 20분의 1로 줄이는 거래다.
+
+    지수당 약 12초라 전체 백필이 10분 가까이 걸린다 → full_refresh 없이
+    lookback 증분으로 돈다. start_from 도 자기 계열 기준으로 본다.
+    """
+
+    source, target, keys = "krx_sector", "prices", ["date", "ticker"]
+
+    #: ★ 지수 47개를 기본 간격(0.3초)으로 긁다가 KRX 에 차단당했다.
+    #: 16개까지 들어온 뒤 서버가 JSON 대신 에러페이지를 돌려주기 시작했고,
+    #: pykrx 는 import 단계에서 그걸 만나 JSONDecodeError 로 죽는다.
+    #: 백필은 한 번만 하면 되므로 느려도 안전한 쪽을 택한다.
+    SLEEP = 1.5
+
+    def _last_dates(self) -> dict[str, pd.Timestamp]:
+        """티커별 마지막 관측일. 없는 티커는 빠진다."""
+        from src import store
+
+        df = store.read(self.target)
+        if df.empty:
+            return {}
+        mine = {f"KRX.{i['ticker']}" for i in settings.series_for("krx_sector")}
+        df = df[df["ticker"].isin(mine)]
+        return {} if df.empty else df.groupby("ticker")["date"].max().to_dict()
+
+    def start_from(self, lookback_days: int) -> pd.Timestamp:
+        """전체 시작점은 가장 뒤처진 티커에 맞춘다 — 실제 판단은 fetch 안에서
+        티커별로 한다(아래 주석 참조)."""
+        return pd.Timestamp(settings.DEFAULT_START)
+
+    def fetch(self, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+        if not (os.getenv("KRX_ID") and os.getenv("KRX_PW")):
+            raise RuntimeError("KRX_ID/KRX_PW 가 없어 업종지수를 받을 수 없습니다.")
+        from pykrx import stock
+
+        items = settings.series_for("krx_sector")
+        last = self._last_dates()
+        frames, failed = [], []
+        for n, item in enumerate(items, 1):
+            code = str(item["ticker"])
+            # ★ 티커별로 시작점을 따로 잡는다. 47개를 한 번에 긁다 세션이
+            #   끊기면 앞쪽만 들어오는데, 전체 최신일 기준으로 재실행하면
+            #   빠진 티커가 '최근 30일'만 받고 히스토리를 영영 못 채운다.
+            #   실제로 1002~1017 만 들어오고 나머지가 통째로 빠졌었다.
+            prev = last.get(f"KRX.{code}")
+            t0 = (prev - pd.Timedelta(days=settings.LOOKBACK_DAYS)
+                  if prev is not None else start)
+            if t0 >= end:
+                continue
+            try:
+                raw = stock.get_index_ohlcv(t0.strftime("%Y%m%d"),
+                                            end.strftime("%Y%m%d"), code)
+            except Exception as e:
+                failed.append(f"{code}({type(e).__name__})")
+                # 차단이 시작되면 나머지도 전부 실패한다. 계속 두드리면
+                # 차단만 길어지므로 연속 실패 3회에서 멈추고 다음 실행에 재개한다.
+                if len(failed) >= 3 and len(failed) >= n - len(frames):
+                    print(f"  연속 실패 — KRX 차단으로 보고 중단합니다 "
+                          f"({len(frames)}개 수집). 다음 실행에서 재개됩니다.")
+                    break
+                continue
+            finally:
+                time.sleep(self.SLEEP)
+            if raw is None or raw.empty:
+                continue
+
+            # ★ pykrx 는 한글 컬럼이다. FDR 용 COLMAP 을 쓰면 KeyError 가 난다.
+            sub = raw.loc[:, [c for c in KRX_COLMAP if c in raw.columns]]
+            sub = sub.rename(columns=KRX_COLMAP).dropna(subset=["close"])
+            # 업종지수는 거래량이 0 인 날이 있다 — 종가만 있으면 폭 계산에 충분
+            idx = pd.to_datetime(sub.index)
+            df = sub.reset_index(drop=True)
+            df.insert(0, "ticker", f"KRX.{code}")
+            df.insert(0, "date", idx.normalize())
+            for c in KRX_COLMAP.values():
+                if c not in df.columns:
+                    df[c] = pd.NA
+            frames.append(df)
+            if n % 10 == 0:
+                print(f"  {n}/{len(items)} …")
+
+        print(f"  지수 {len(frames)}/{len(items)}개 수집"
+              + (f", 실패 {failed}" if failed else ""))
+        if not frames:
+            return pd.DataFrame(columns=["date", "ticker", *KRX_COLMAP.values()])
         return pd.concat(frames, ignore_index=True)
