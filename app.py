@@ -13,7 +13,9 @@ from config import settings
 from src import store
 from src.indicators import liquidity as lq
 from src.indicators import technical as ta
+from src.research import flows_view as fv
 from src.research import ic as ic_mod
+from src.research import leverage as lev
 from src.research import regime
 from src.research import seasonality as sea
 from src.research import catalog as catalog_mod
@@ -281,8 +283,8 @@ if not _kospi.empty:
 st.divider()
 
 # --------------------------------------------------------------- 탭
-tab_ov, tab_kr, tab_liq, tab_x, tab_res, tab_data = st.tabs(
-    ["개요", "한국 시장", "유동성", "크로스에셋", "연구", "데이터"])
+tab_ov, tab_kr, tab_liq, tab_x, tab_res, tab_lev, tab_data = st.tabs(
+    ["개요", "한국 시장", "유동성", "크로스에셋", "연구", "신용·수급", "데이터"])
 
 with tab_ov:
     avail = [t for t in names if not close_of(prices, t).empty]
@@ -929,3 +931,147 @@ with tab_data:
             key=f"dl_{name}", width="stretch")
     st.caption("한글이 깨지지 않도록 UTF-8 BOM 으로 저장됩니다 (엑셀 호환).")
 
+
+with tab_lev:
+    st.subheader("신용(레버리지) 위험")
+    st.caption(
+        "**예측이 아니라 파산 확률 문제입니다.** 60일 뒤 지수가 제자리로 돌아와도 "
+        "그 사이 한 번만 담보비율을 깨면 이미 청산된 뒤입니다. "
+        "'장기적으로는 오른다'가 레버리지에서 통하지 않는 이유입니다."
+    )
+
+    lc1, lc2 = st.columns(2)
+    my_lev = lc1.slider("내 레버리지 (총자산 ÷ 자기자본)", 1.0, 3.0, 2.0, 0.1,
+                        key="my_lev",
+                        help="2.0 = 자기자본만큼 빌림 (융자 비중 50%)")
+    maint = lc2.slider("담보유지비율 (%)", 120, 170, 140, 5, key="maint",
+                       help="증권사·종목별로 다릅니다. 보통 140%") / 100
+
+    kospi_l = close_of(prices, "KRX.1001")
+    if kospi_l.empty:
+        st.info("KOSPI 데이터가 없습니다.")
+    else:
+        x = lev.margin_call_drawdown(my_lev, maint)
+        dd_now = float(vu.drawdown(kospi_l).iloc[-1])
+        loc_dd = float(lev.local_drawdown(kospi_l).iloc[-1])
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("반대매매까지", f"-{x * 100:.1f}%",
+                  "여기서 더 빠지면 강제청산", delta_color="off")
+        m2.metric("전고점 대비", f"{dd_now:.1%}")
+        m3.metric("1년 고점 대비", f"{loc_dd:.1%}",
+                  "레버리지엔 이쪽이 더 맞습니다", delta_color="off")
+
+        st.markdown("**레버리지별 임계 — 담보유지 {:.0f}% 기준**".format(maint * 100))
+        st.dataframe(lev.leverage_table(maint), width="stretch", hide_index=True)
+
+        st.markdown("**과거 조정에서 살아남았나**")
+        ep_l = vu.episodes(kospi_l)
+        surv = []
+        for L in (1.5, 1.8, 2.0, 2.5, 3.0):
+            xx = lev.margin_call_drawdown(L, maint)
+            surv.append({"레버리지": f"{L:.1f}x",
+                         "임계 하락률%": round(xx * 100, 1),
+                         f"{len(ep_l)}회 중 청산": int((ep_l["depth"] <= -xx).sum())})
+        st.dataframe(pd.DataFrame(surv), width="stretch", hide_index=True)
+        st.dataframe(lev.survival_by_leverage(kospi_l, maintenance=maint),
+                     width="stretch", hide_index=True)
+
+        vres_l = vulnerability_result()
+        if vres_l and not vres_l.get("error"):
+            cond = lev.conditional_risk(vres_l["index"], kospi_l,
+                                        leverage=my_lev, maintenance=maint,
+                                        condition=vu.near_high(kospi_l))
+            if not cond.empty:
+                st.markdown(f"**취약성 분위별 반대매매 확률 ({my_lev:.1f}x)**")
+                st.dataframe(cond, width="stretch")
+                st.caption(
+                    "취약성 지수는 조정 **시점**을 절반쯤 놓칩니다. 하지만 "
+                    "레버리지 판단에는 시점이 아니라 **확률**이면 충분합니다 — "
+                    "분위 간 차이가 몇 배로 벌어지면 결정을 바꾸기에 충분합니다."
+                )
+
+        md_sig = lev.margin_debt_signal(macro_series(macro, "ecos.margin_debt"),
+                                        macro_series(macro, "ecos.kospi_marcap"))
+        vres_ok = vres_l and not vres_l.get("error")
+        chk = lev.deleverage_checklist(
+            drawdown=dd_now,
+            vulnerability=(float(vres_l["index"].dropna().iloc[-1])
+                           if vres_ok and not vres_l["index"].dropna().empty else None),
+            applicable=bool(vu.near_high(kospi_l).iloc[-1]),
+            margin_pr=(float(md_sig["백분위"].iloc[-1]) if not md_sig.empty else None),
+            leverage=my_lev, maintenance=maint)
+        st.markdown("**판단 재료**")
+        icon = {"ok": "🟢", "warn": "🟡", "bad": "🔴", "info": "⚪"}
+        for lv_, label, val in chk:
+            st.markdown(f"{icon.get(lv_, '•')} **{label}** — {val}")
+        st.caption(
+            "**자동 매매 신호가 아닙니다.** '지금 꺼라'를 지표가 말하게 하면 "
+            "그 지표가 틀렸을 때 책임질 방법이 없습니다. 재료를 보고 판단은 "
+            "직접 하세요."
+        )
+
+    st.divider()
+    st.subheader("예탁금 vs 신용융자")
+    dm = fv.deposit_vs_margin(macro_series(macro, "ecos.investor_deposit"),
+                              macro_series(macro, "ecos.margin_debt"))
+    if dm.empty:
+        st.info("예탁금·신용융자 데이터가 없습니다.")
+    else:
+        d1, d2, d3 = st.columns(3)
+        d1.metric("예탁금", f"{dm['예탁금'].iloc[-1]:,.1f}조")
+        d2.metric("신용융자", f"{dm['신용융자'].iloc[-1]:,.1f}조")
+        d3.metric("신용/예탁금", f"{dm['신용/예탁금%'].iloc[-1]:.1f}%",
+                  f"역대 최고 {dm['신용/예탁금%'].max():.1f}%", delta_color="off")
+        st.plotly_chart(
+            charts.macro_lines({"예탁금": clip(dm["예탁금"], start),
+                                "신용융자": clip(dm["신용융자"], start)},
+                               "예탁금 · 신용융자 (조원)", mode=mode,
+                               ylabel="조원", height=380),
+            width="stretch")
+        st.plotly_chart(
+            charts.macro_lines({"신용/예탁금": clip(dm["신용/예탁금%"], start)},
+                               "신용융자 ÷ 예탁금 (%)", mode=mode,
+                               ylabel="%", height=340),
+            width="stretch")
+        st.caption(
+            "예탁금은 **대기 자금**, 신용융자는 **빌려서 이미 산 돈**입니다. "
+            "비율이 오르면 시장이 현금보다 빚으로 굴러간다는 뜻이고, 조정 때 "
+            "반대매매로 증폭될 여지가 커집니다. "
+            f"역대 최고는 {dm['신용/예탁금%'].idxmax().date()} 의 "
+            f"{dm['신용/예탁금%'].max():.1f}% 였습니다."
+        )
+
+    st.divider()
+    st.subheader("누적 순매수 — 누가 사고 누가 팔았나")
+    if flows.empty:
+        st.info("수급 데이터가 없습니다.")
+    else:
+        f1, f2 = st.columns([2, 3])
+        mk_c = f1.radio("시장", sorted(flows["market"].unique()),
+                        horizontal=True, key="cum_market")
+        since = f2.selectbox(
+            "누적 시작", ["2005년부터", "10년", "5년", "3년", "1년"],
+            key="cum_since",
+            help="누적선은 시작점에 따라 모양이 완전히 달라집니다")
+        days = {"10년": 365 * 10, "5년": 365 * 5, "3년": 365 * 3, "1년": 365}
+        st0 = (None if since == "2005년부터"
+               else pd.Timestamp.today().normalize() - pd.Timedelta(days=days[since]))
+        cum = fv.cumulative(flows, mk_c, start=st0)
+        if cum.empty:
+            st.info("누적할 데이터가 없습니다.")
+        else:
+            order = [c for c in ["개인", "외국인합계", "기관합계", "기타법인"]
+                     if c in cum.columns]
+            st.plotly_chart(
+                charts.macro_lines({c: cum[c] for c in order},
+                                   f"{mk_c} 누적 순매수 ({since}, 조원)",
+                                   mode=mode, ylabel="조원", zero_line=True,
+                                   height=440),
+                width="stretch")
+            last = cum.iloc[-1]
+            st.caption(
+                "현재 누적 " + " · ".join(f"{c} {last[c]:+,.0f}조" for c in order)
+                + ". 일간 순매수는 잡음이지만 **누적하면 구조가 보입니다** — "
+                  "누가 몇 년째 팔고 누가 받아냈는지는 이 선에서만 드러납니다."
+            )
