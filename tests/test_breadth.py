@@ -138,3 +138,90 @@ def test_zero_volume_days_excluded():
     close = pd.Series([100.0, 98.0, 96.0], index=idx)
     vol = pd.Series([0.0, 0.0, 0.0], index=idx)
     assert br.distribution_days(close, vol, window=3).iloc[-1] == 0
+
+
+# --- 실제 데이터: 검증 결과를 회귀로 고정 ---------------------------------
+@pytest.fixture(scope="module")
+def real():
+    from config import settings
+    from src import store
+
+    p = store.read("prices")
+    if p.empty:
+        pytest.skip("prices 없음")
+    sect = [f"KRX.{i['ticker']}" for i in settings.series_for("krx_sector")
+            if i.get("group") == "sector"]
+    mat = br.sector_matrix(p, sect)
+    if mat.shape[1] < 40:
+        pytest.skip(f"업종 {mat.shape[1]}개 — 44개 필요")
+    k = p[p.ticker == "KRX.1001"].set_index("date")["close"].sort_index().astype("float64")
+    return p, mat, k
+
+
+def test_all_44_sectors_present(real):
+    _, mat, _ = real
+    assert mat.shape[1] == 44
+    assert mat.shape[0] > 5000
+
+
+def test_breadth_metrics_are_sane(real):
+    p, mat, k = real
+    assert br.pct_above_ma(mat, 200).dropna().between(0, 1).all()
+    assert br.advance_ratio(mat, 20).dropna().between(0, 1).all()
+    assert (br.dispersion(mat, 20).dropna() >= 0).all()
+    assert br.divergence(k, br.pct_above_ma(mat, 200)).dropna().between(-1, 1).all()
+
+
+def test_breadth_does_not_improve_index(real):
+    """★ 검증 구간에서 고른 breadth 를 넣으면 테스트 구간이 나빠진다.
+
+    47개 업종지수를 받으려고 KRX 차단까지 맞아가며 붙였지만, 3분할 검증의
+    답은 '넣지 마라' 였다(-0.636 → -0.619). 이미 있는 모멘텀·이격도와 축이
+    겹치기 때문으로 보인다.
+
+    이 테스트가 깨지면(=개선되면) 좋은 소식이지만, 그땐 절차가 지켜졌는지
+    부터 확인할 것. 테스트 구간을 보고 고르면 무엇이든 좋아진다.
+    """
+    from src.indicators import liquidity as lq
+    from src import store
+    from src.research import vulnerability as vu
+
+    p, mat, k = real
+    m, f = store.read("macro"), store.read("flows")
+
+    def ms(x):
+        return m[m.series_id == x].set_index("date")["value"].sort_index().astype("float64")
+
+    fk = f[(f.market == "KOSPI") & (f.investor == "외국인합계")] \
+        .set_index("date")["net_value"].sort_index() / 1e12
+    nl = lq.us_net_liquidity(*[ms(x) for x in
+                               ["fred.WALCL", "fred.WTREGEN", "fred.RRPONTSYD"]])
+    base = vu.build_components(
+        k, turnover=ms("ecos.kospi_value"), foreign_flow=fk,
+        market_cap=ms("ecos.kospi_marcap"), net_liquidity=nl,
+        yield_curve=(ms("ecos.ktb10y") - ms("ecos.ktb3y")),
+        exports=ms("ecos.exports"), margin_debt=ms("ecos.margin_debt"),
+        pbr=ms("krx.1001_pbr"),
+        credit_spread=(ms("ecos.corp_aa") - ms("ecos.ktb3y")))
+
+    def al(s):
+        s = s.dropna()
+        return s.astype("float64").reindex(k.index.union(s.index)).ffill().reindex(k.index)
+
+    tgt = vu.forward_max_drawdown(k, 60)
+    nh = vu.near_high(k)
+    tst = (k.index >= pd.Timestamp("2021-01-01")) & nh.reindex(k.index).fillna(False)
+
+    def ic(cols):
+        c = base.copy()
+        for n, s in cols.items():
+            c[n] = s
+        r = vu.walk_forward(c, k, split="2016-01-01", condition=nh)
+        return vu.spearman(r["index"][tst], tgt[tst])
+
+    base_ic = ic({})
+    with_breadth = ic({"200일선 위 업종비율": al(br.pct_above_ma(mat, 200)),
+                       "소형-대형": al(br.small_vs_large(p, 60))})
+    assert with_breadth > base_ic, (
+        f"breadth 를 넣으니 테스트가 개선됐다 ({with_breadth:+.3f} vs "
+        f"{base_ic:+.3f}) — 절차가 지켜졌는지 먼저 확인할 것")

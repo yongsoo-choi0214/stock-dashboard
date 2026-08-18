@@ -13,6 +13,7 @@ from config import settings
 from src import store
 from src.indicators import liquidity as lq
 from src.indicators import technical as ta
+from src.research import breadth
 from src.research import flows_view as fv
 from src.research import ic as ic_mod
 from src.research import leverage as lev
@@ -398,6 +399,44 @@ with tab_kr:
             m3.metric("예탁금 회전율", f"{turn.iloc[-1]:.3f}", fmt_delta(turn))
         st.caption("예탁금은 ECOS 증시주변자금동향(901Y056) 월간 계열입니다. "
                    "시총·거래대금은 일간이라 월말/월평균으로 맞춰 계산했습니다.")
+
+    st.subheader("시장 폭 (breadth)")
+    _sect = [f"KRX.{i['ticker']}" for i in settings.series_for("krx_sector")
+             if i.get("group") == "sector"]
+    _mat = breadth.sector_matrix(prices, _sect)
+    if _mat.empty or _mat.shape[1] < 10:
+        st.info("업종지수가 부족합니다. `run_all --only krx_sector`")
+    else:
+        pa = breadth.pct_above_ma(_mat, 200)
+        ar = breadth.advance_ratio(_mat, 20)
+        sl = breadth.small_vs_large(prices, 60)
+        dv = breadth.divergence(close_of(prices, "KRX.1001"), pa)
+        b1, b2, b3, b4 = st.columns(4)
+        b1.metric("200일선 위 업종", f"{pa.iloc[-1]:.0%}",
+                  f"{_mat.shape[1]}개 업종 중", delta_color="off")
+        b2.metric("20일 상승 업종", f"{ar.iloc[-1]:.0%}")
+        if not sl.empty:
+            b3.metric("소형-대형 60일", f"{sl.iloc[-1]:+.1%}",
+                      "음수면 대형주만 강세", delta_color="off")
+        if not dv.empty:
+            b4.metric("지수-폭 괴리", f"{dv.iloc[-1]:+.2f}",
+                      "+1 이면 지수만 신고가", delta_color="off")
+
+        st.plotly_chart(
+            charts.macro_lines({"200일선 위 업종비율": clip(pa, start),
+                                "20일 상승 업종비율": clip(ar, start)},
+                               "시장 폭 (업종 기준)", mode=mode,
+                               ylabel="비율", height=380,
+                               hover_fmt=":.0%"),
+            width="stretch")
+        st.caption(
+            "지수는 시가총액 가중이라 대형주 몇 개가 끌어올리면 신고가가 납니다. "
+            "그동안 나머지가 무너져도 지수에는 안 보입니다 — 그걸 재는 것이 폭입니다. "
+            "**다만 이 지표는 취약성 지수에 넣지 않았습니다**: 검증 구간에서 고른 뒤 "
+            "2021년 이후로 시험했더니 오히려 나빠졌습니다(-0.636 → -0.619). "
+            "이미 있는 모멘텀·이격도와 축이 겹치는 것으로 보입니다. "
+            "참고 지표로만 보세요."
+        )
 
     st.subheader("투자자별 수급")
     fk = clip(macro_series(macro, "ecos.foreign_net_kospi"), start)

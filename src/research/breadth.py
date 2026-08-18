@@ -94,7 +94,8 @@ def divergence(index_close: pd.Series, breadth: pd.Series,
     from src.indicators.technical import pct_rank
 
     px = index_close.dropna()
-    bd = breadth.dropna().reindex(px.index).ffill()
+    # astype 없이 ffill 하면 bool/object 로 남아 pandas 가 downcast 경고를 낸다
+    bd = breadth.dropna().astype("float64").reindex(px.index).ffill()
     px_pr = pct_rank(px.rename("px"), window)
     bd_pr = pct_rank(bd.rename("bd"), window)
     return (px_pr - bd_pr).dropna().rename(f"divergence_{window}")
