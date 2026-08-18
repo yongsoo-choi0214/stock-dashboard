@@ -1,65 +1,65 @@
 {
   "fred": {
-    "last_run": "2026-08-18T07:48:07+09:00",
+    "last_run": "2026-08-18T18:38:06+09:00",
     "status": "ok",
     "rows": 36117,
     "max_date": "2026-08-17",
-    "target_rows": 188514
-  },
-  "krx_index": {
-    "last_run": "2026-08-15T00:33:32+09:00",
-    "status": "ok",
-    "rows": 16002,
-    "max_date": "2026-08-14",
-    "target_rows": 160686
-  },
-  "us_equity": {
-    "last_run": "2026-08-18T07:49:53+09:00",
-    "status": "ok",
-    "rows": 59374,
-    "max_date": "2026-08-17",
-    "target_rows": 290154
-  },
-  "ecos": {
-    "last_run": "2026-08-18T07:49:49+09:00",
-    "status": "ok",
-    "rows": 73397,
-    "max_date": "2026-08-15",
     "target_rows": 188517
   },
+  "krx_index": {
+    "last_run": "2026-08-18T18:39:57+09:00",
+    "status": "ok",
+    "rows": 16005,
+    "max_date": "2026-08-18",
+    "target_rows": 290157
+  },
+  "us_equity": {
+    "last_run": "2026-08-18T18:42:56+09:00",
+    "status": "ok",
+    "rows": 59365,
+    "max_date": "2026-08-18",
+    "target_rows": 290211
+  },
+  "ecos": {
+    "last_run": "2026-08-18T18:39:51+09:00",
+    "status": "ok",
+    "rows": 73405,
+    "max_date": "2026-08-18",
+    "target_rows": 188525
+  },
   "krx_flow": {
-    "last_run": "2026-08-15T00:33:37+09:00",
+    "last_run": "2026-08-18T18:40:02+09:00",
     "status": "ok",
     "rows": 184,
-    "max_date": "2026-08-14",
-    "target_rows": 42672
+    "max_date": "2026-08-18",
+    "target_rows": 42680
   },
   "alfred": {
-    "last_run": "2026-08-18T07:49:59+09:00",
+    "last_run": "2026-08-18T18:43:02+09:00",
     "status": "ok",
     "rows": 4297,
     "max_date": "2026-08-17",
     "target_rows": 4297
   },
   "krx_aux": {
-    "last_run": "2026-08-15T00:33:42+09:00",
+    "last_run": "2026-08-18T18:40:05+09:00",
     "status": "ok",
-    "rows": 32004,
-    "max_date": "2026-08-14",
-    "target_rows": 188469
+    "rows": 32010,
+    "max_date": "2026-08-18",
+    "target_rows": 188531
   },
   "krx_fundamental": {
-    "last_run": "2026-08-15T00:33:45+09:00",
+    "last_run": "2026-08-18T18:41:08+09:00",
     "status": "ok",
-    "rows": 216,
+    "rows": 198,
     "max_date": "2026-08-14",
-    "target_rows": 188496
+    "target_rows": 188531
   },
   "krx_sector": {
-    "last_run": "2026-08-15T00:40:55+09:00",
+    "last_run": "2026-08-18T18:42:53+09:00",
     "status": "ok",
-    "rows": 129786,
-    "max_date": "2026-08-14",
-    "target_rows": 290120
+    "rows": 1081,
+    "max_date": "2026-08-18",
+    "target_rows": 290204
   }
 }
