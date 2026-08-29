@@ -1,10 +1,10 @@
 {
   "fred": {
-    "last_run": "2026-08-29T05:46:58+09:00",
+    "last_run": "2026-08-29T12:46:48+09:00",
     "status": "ok",
-    "rows": 36178,
+    "rows": 36182,
     "max_date": "2026-08-28",
-    "target_rows": 188815
+    "target_rows": 188836
   },
   "krx_index": {
     "last_run": "2026-08-29T05:48:49+09:00",
@@ -14,18 +14,18 @@
     "target_rows": 290654
   },
   "us_equity": {
-    "last_run": "2026-08-29T05:49:04+09:00",
+    "last_run": "2026-08-29T12:48:11+09:00",
     "status": "ok",
     "rows": 59473,
     "max_date": "2026-08-28",
     "target_rows": 290659
   },
   "ecos": {
-    "last_run": "2026-08-29T05:48:40+09:00",
+    "last_run": "2026-08-29T12:48:08+09:00",
     "status": "ok",
     "rows": 73518,
     "max_date": "2026-08-31",
-    "target_rows": 188826
+    "target_rows": 188836
   },
   "krx_flow": {
     "last_run": "2026-08-29T05:48:53+09:00",
@@ -33,7 +33,7 @@
     "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
   },
   "alfred": {
-    "last_run": "2026-08-29T05:49:06+09:00",
+    "last_run": "2026-08-29T12:48:15+09:00",
     "status": "ok",
     "rows": 4310,
     "max_date": "2026-08-28",
