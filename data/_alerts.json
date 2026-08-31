@@ -1,10 +1,7 @@
 {
   "active": [
     "deposit:low",
-    "etl:fail:krx_flow",
-    "etl:fail:krx_fundamental",
-    "etl:fail:krx_sector",
     "regime:수축"
   ],
-  "updated": "2026-08-29T12:48:19+09:00"
+  "updated": "2026-09-01T01:58:50+09:00"
 }
