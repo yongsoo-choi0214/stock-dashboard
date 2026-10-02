@@ -1,59 +1,62 @@
 {
   "fred": {
-    "last_run": "2026-10-02T10:44:42+09:00",
+    "last_run": "2026-10-03T00:35:42+09:00",
     "status": "ok",
     "rows": 36341,
     "max_date": "2026-10-01",
-    "target_rows": 189601
+    "target_rows": 189610
   },
   "krx_index": {
-    "last_run": "2026-10-02T01:13:35+09:00",
+    "last_run": "2026-10-03T00:37:33+09:00",
     "status": "ok",
     "rows": 16071,
     "max_date": "2026-09-17",
-    "target_rows": 291981
-  },
-  "us_equity": {
-    "last_run": "2026-10-02T10:46:30+09:00",
-    "status": "ok",
-    "rows": 59729,
-    "max_date": "2026-10-02",
     "target_rows": 291991
   },
-  "ecos": {
-    "last_run": "2026-10-02T10:46:27+09:00",
+  "us_equity": {
+    "last_run": "2026-10-03T00:38:07+09:00",
     "status": "ok",
-    "rows": 73825,
+    "rows": 59736,
     "max_date": "2026-10-02",
-    "target_rows": 189609
+    "target_rows": 291999
+  },
+  "ecos": {
+    "last_run": "2026-10-03T00:37:26+09:00",
+    "status": "ok",
+    "rows": 73831,
+    "max_date": "2026-10-02",
+    "target_rows": 189616
   },
   "krx_flow": {
-    "last_run": "2026-10-02T01:13:39+09:00",
-    "status": "fail",
-    "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    "last_run": "2026-10-03T00:37:41+09:00",
+    "status": "ok",
+    "rows": 0,
+    "note": "no new data"
   },
   "alfred": {
-    "last_run": "2026-10-02T10:46:35+09:00",
+    "last_run": "2026-10-03T00:38:09+09:00",
     "status": "ok",
     "rows": 4343,
     "max_date": "2026-10-01",
     "target_rows": 4343
   },
   "krx_aux": {
-    "last_run": "2026-10-02T01:13:43+09:00",
+    "last_run": "2026-10-03T00:37:45+09:00",
     "status": "ok",
     "rows": 32142,
     "max_date": "2026-09-17",
-    "target_rows": 189593
+    "target_rows": 189616
   },
   "krx_fundamental": {
-    "last_run": "2026-10-02T01:13:45+09:00",
-    "status": "fail",
-    "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    "last_run": "2026-10-03T00:37:51+09:00",
+    "status": "ok",
+    "rows": 0,
+    "note": "no new data"
   },
   "krx_sector": {
-    "last_run": "2026-10-02T01:13:48+09:00",
-    "status": "fail",
-    "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    "last_run": "2026-10-03T00:38:04+09:00",
+    "status": "ok",
+    "rows": 0,
+    "note": "no new data"
   }
 }
