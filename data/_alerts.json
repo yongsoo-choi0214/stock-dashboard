@@ -1,8 +1,7 @@
 {
   "active": [
     "deposit:low",
-    "regime:회복 시도",
-    "rsi:KRX.1001:under"
+    "regime:회복 시도"
   ],
-  "updated": "2026-10-17T09:41:00+09:00"
+  "updated": "2026-10-20T01:23:02+09:00"
 }
