@@ -1,60 +1,60 @@
 {
   "fred": {
-    "last_run": "2026-10-29T10:53:45+09:00",
+    "last_run": "2026-10-30T00:57:49+09:00",
     "status": "ok",
-    "rows": 36462,
+    "rows": 36463,
     "max_date": "2026-10-28",
-    "target_rows": 190125
+    "target_rows": 190133
   },
   "krx_index": {
-    "last_run": "2026-10-29T00:51:29+09:00",
+    "last_run": "2026-10-30T00:59:20+09:00",
     "status": "ok",
-    "rows": 16146,
-    "max_date": "2026-10-28",
-    "target_rows": 292259
+    "rows": 16149,
+    "max_date": "2026-10-29",
+    "target_rows": 292273
   },
   "us_equity": {
-    "last_run": "2026-10-29T10:55:04+09:00",
+    "last_run": "2026-10-30T01:00:00+09:00",
     "status": "ok",
-    "rows": 59933,
+    "rows": 59940,
     "max_date": "2026-10-29",
-    "target_rows": 292270
+    "target_rows": 292281
   },
   "ecos": {
-    "last_run": "2026-10-29T10:55:01+09:00",
+    "last_run": "2026-10-30T00:59:05+09:00",
     "status": "ok",
-    "rows": 74057,
+    "rows": 74064,
     "max_date": "2026-10-31",
-    "target_rows": 190132
+    "target_rows": 190140
   },
   "krx_flow": {
-    "last_run": "2026-10-29T00:51:39+09:00",
+    "last_run": "2026-10-30T00:59:27+09:00",
     "status": "ok",
     "rows": 0,
     "note": "no new data"
   },
   "alfred": {
-    "last_run": "2026-10-29T10:55:09+09:00",
+    "last_run": "2026-10-30T01:00:29+09:00",
     "status": "ok",
     "rows": 4367,
     "max_date": "2026-10-28",
     "target_rows": 4367
   },
   "krx_aux": {
-    "last_run": "2026-10-29T00:51:48+09:00",
+    "last_run": "2026-10-30T00:59:37+09:00",
     "status": "ok",
-    "rows": 32292,
-    "max_date": "2026-10-28",
-    "target_rows": 190121
+    "rows": 32298,
+    "max_date": "2026-10-29",
+    "target_rows": 190146
   },
   "krx_fundamental": {
-    "last_run": "2026-10-29T00:51:57+09:00",
+    "last_run": "2026-10-30T00:59:44+09:00",
     "status": "ok",
     "rows": 0,
     "note": "no new data"
   },
   "krx_sector": {
-    "last_run": "2026-10-29T00:52:09+09:00",
+    "last_run": "2026-10-30T00:59:55+09:00",
     "status": "ok",
     "rows": 0,
     "note": "no new data"
