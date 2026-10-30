@@ -1,60 +1,60 @@
 {
   "fred": {
-    "last_run": "2026-10-30T11:03:47+09:00",
+    "last_run": "2026-10-31T00:44:10+09:00",
     "status": "ok",
     "rows": 36473,
     "max_date": "2026-10-29",
-    "target_rows": 190156
+    "target_rows": 190163
   },
   "krx_index": {
-    "last_run": "2026-10-30T00:59:20+09:00",
+    "last_run": "2026-10-31T00:45:42+09:00",
     "status": "ok",
-    "rows": 16149,
-    "max_date": "2026-10-29",
-    "target_rows": 292273
+    "rows": 16152,
+    "max_date": "2026-10-30",
+    "target_rows": 292287
   },
   "us_equity": {
-    "last_run": "2026-10-30T11:05:08+09:00",
+    "last_run": "2026-10-31T00:46:21+09:00",
     "status": "ok",
-    "rows": 59944,
+    "rows": 59951,
     "max_date": "2026-10-30",
-    "target_rows": 292284
+    "target_rows": 292295
   },
   "ecos": {
-    "last_run": "2026-10-30T11:05:05+09:00",
+    "last_run": "2026-10-31T00:45:29+09:00",
     "status": "ok",
-    "rows": 74070,
+    "rows": 74077,
     "max_date": "2026-10-31",
-    "target_rows": 190162
+    "target_rows": 190170
   },
   "krx_flow": {
-    "last_run": "2026-10-30T00:59:27+09:00",
+    "last_run": "2026-10-31T00:45:49+09:00",
     "status": "ok",
     "rows": 0,
     "note": "no new data"
   },
   "alfred": {
-    "last_run": "2026-10-30T11:05:15+09:00",
+    "last_run": "2026-10-31T00:46:24+09:00",
     "status": "ok",
     "rows": 4370,
     "max_date": "2026-10-29",
     "target_rows": 4370
   },
   "krx_aux": {
-    "last_run": "2026-10-30T00:59:37+09:00",
+    "last_run": "2026-10-31T00:45:56+09:00",
     "status": "ok",
-    "rows": 32298,
-    "max_date": "2026-10-29",
-    "target_rows": 190146
+    "rows": 32304,
+    "max_date": "2026-10-30",
+    "target_rows": 190176
   },
   "krx_fundamental": {
-    "last_run": "2026-10-30T00:59:44+09:00",
+    "last_run": "2026-10-31T00:46:03+09:00",
     "status": "ok",
     "rows": 0,
     "note": "no new data"
   },
   "krx_sector": {
-    "last_run": "2026-10-30T00:59:55+09:00",
+    "last_run": "2026-10-31T00:46:17+09:00",
     "status": "ok",
     "rows": 0,
     "note": "no new data"
