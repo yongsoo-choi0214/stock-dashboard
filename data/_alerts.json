@@ -1,6 +1,7 @@
 {
   "active": [
-    "regime:수축"
+    "regime:수축",
+    "rsi:KRX.2001:under"
   ],
-  "updated": "2026-11-06T11:40:27+09:00"
+  "updated": "2026-11-07T01:42:05+09:00"
 }
