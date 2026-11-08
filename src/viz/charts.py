@@ -432,12 +432,14 @@ def monthly_seasonality(stats: pd.DataFrame, *, mode: str = "light",
     return theme.apply(fig, mode, height=height)
 
 
-#: 블로그 신호 단계 → 색 슬롯 / 마커. 단계가 개체이므로 색은 단계를 따라간다.
+#: 블로그 신호 단계 → (색 슬롯, 마커, 범례 이름, 마커 옆 글자).
+#: 색은 '매수=초록, 매도=빨강, 준비=주황' 으로 의미를 따른다. 2·3단계는 같은 매수라 같은 색,
+#: 모양(채움/빈 삼각형)으로 구분한다.
 SIGNAL_STYLE = {
-    "pit": (1, "circle", "1단계 웅덩이"),
-    "obv_gold": (2, "triangle-up", "2단계 OBV gold"),
-    "di_gold": (6, "triangle-up", "3단계 DI gold"),
-    "sell_w": (7, "triangle-down", "매도 신호"),
+    "pit": (1, "circle", "매수 준비 (1단계)", None),
+    "obv_gold": (2, "triangle-up", "매수 신호 (2단계)", "매수"),
+    "di_gold": (2, "triangle-up-open", "매수 신호 (3단계)", "매수"),
+    "sell_w": (7, "triangle-down", "매도 신호", "매도"),
 }
 
 
@@ -457,20 +459,28 @@ def blog_signal_panel(f: pd.DataFrame, sig: pd.DataFrame, title: str, *,
                              line=dict(color=p["series"][0], width=2),
                              hovertemplate="%{y:,.2f}<extra>종가</extra>"),
                   row=1, col=1)
-    for key, (slot, symbol, label) in SIGNAL_STYLE.items():
+    show_text = len(c) <= 400                              # 1년 이하 화면에서만 글자 표시
+    for key, (slot, symbol, label, word) in SIGNAL_STYLE.items():
         if key not in sig:
             continue
         on = sig[key].reindex(c.index, fill_value=False)
         if not on.any():
             continue
-        y = c[on] * (1.08 if key == "sell_w" else 0.92)   # 선과 겹치지 않게 띄운다
+        sell = key == "sell_w"
+        y = c[on] * (1.09 if sell else 0.91)               # 선과 겹치지 않게 띄운다
+        hollow = symbol.endswith("-open")
         fig.add_trace(go.Scatter(
-            x=y.index, y=y, name=label, mode="markers",
+            x=y.index, y=y, name=label,
+            mode="markers+text" if (word and show_text) else "markers",
+            text=[word] * int(on.sum()) if word else None,
+            textposition="top center" if sell else "bottom center",
+            textfont=dict(size=11, color=p["series"][slot]),
             marker=dict(color=p["series"][slot], symbol=symbol,
-                        size=7 if key == "pit" else 11,
-                        line=dict(color=p["surface"], width=1.5)),
+                        size=7 if key == "pit" else 12,
+                        line=dict(color=p["series"][slot] if hollow else p["surface"],
+                                  width=2.5 if hollow else 1.5)),
             customdata=c[on],
-            hovertemplate="종가 %{customdata:,.2f}<extra>" + label + "</extra>"),
+            hovertemplate="%{x|%Y-%m-%d} 종가 %{customdata:,.2f}<extra>" + label + "</extra>"),
             row=1, col=1)
 
     fig.add_trace(go.Scatter(x=f.index, y=f["rsi"], name="RSI(14)", mode="lines",
@@ -512,4 +522,9 @@ def blog_signal_panel(f: pd.DataFrame, sig: pd.DataFrame, title: str, *,
     fig.update_yaxes(title_text="OBV 이격", showticklabels=False, row=4, col=1)
     fig.update_layout(title=title, bargap=0)
     fig.update_xaxes(rangeslider_visible=False)
-    return theme.apply(fig, mode, height=860)
+    fig = theme.apply(fig, mode, height=860)
+    # 범례는 차트 위에 — 아래에 두면 화면을 잘라 볼 때 마커 뜻이 빠진다
+    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.01,
+                                  xanchor="left", x=0),
+                      margin=dict(t=90))
+    return fig
