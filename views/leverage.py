@@ -73,9 +73,8 @@ for col, tk in zip(cols, tickers):
     now, c = b["now"], b["d"]["close"]
     label, color, desc = STAGE[now["level"]]
     with col.container(border=True):
-        h1, h2 = st.columns([3, 2], vertical_alignment="center")
-        h1.markdown(f"**{names.get(tk, tk)}**")
-        h2.markdown(f":{color}-badge[{label}]", text_alignment="right")
+        # 이름과 배지를 한 줄에 — 칼럼으로 나누면 휴대폰 폭에서 배지가 다음 줄로 떨어진다
+        st.markdown(f"**{names.get(tk, tk)}** &nbsp; :{color}-badge[{label}]")
         st.metric(f"종가 · {now['asof']:%m/%d}", f"{c.iloc[-1]:,.2f}", fmt_delta(c))
         st.markdown(steps_md(now["on"]))
         st.caption(desc)
