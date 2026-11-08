@@ -61,6 +61,35 @@ STAGES: list[tuple[str, str, str]] = [
 ]
 LABEL = {k: lab for k, lab, _ in STAGES}
 
+#: 단계 → 사람이 읽는 신호 이름과 색. 사이트·텔레그램이 같은 말을 쓴다.
+SIGNAL: dict[str | None, tuple[str, str]] = {
+    None: ("신호 없음", "gray"),
+    "pit": ("매수 준비", "orange"),
+    "obv_gold": ("매수 신호", "green"),
+    "di_gold": ("매수 신호", "green"),
+    "sell_w": ("매도 신호", "red"),
+}
+
+
+def recent_events(df: pd.DataFrame, p: Params = Params(), days: int = 365,
+                  cooldown: int = 20) -> pd.DataFrame:
+    """최근 days 일 신호 이벤트(에피소드 첫날) + 신호 이후 현재까지 수익률. 최신순.
+
+    텔레그램 알림과 같은 단계 정의를 쓴다(알림은 '새로 켜질 때' 기준이라 날짜가 하루 이틀 다를 수 있다).
+    """
+    d = _ohlcv(df)
+    sig = signals(d, p)
+    start = d.index[-1] - pd.Timedelta(days=days)
+    rows = []
+    for key, label, _ in STAGES:
+        ep = episodes(sig[key], cooldown).loc[start:]
+        for day in ep[ep].index:
+            rows.append({"date": day, "key": key, "stage": label,
+                         "signal": SIGNAL[key][0], "close": float(d.close.loc[day]),
+                         "since": float(d.close.iloc[-1] / d.close.loc[day] - 1)})
+    out = pd.DataFrame(rows, columns=["date", "key", "stage", "signal", "close", "since"])
+    return out.sort_values("date", ascending=False).reset_index(drop=True)
+
 
 def _ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     return df[["open", "high", "low", "close", "volume"]].astype("float64").sort_index()

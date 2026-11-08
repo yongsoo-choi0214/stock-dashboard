@@ -33,7 +33,8 @@ def _bundle(ticker: str, stamp: float) -> dict:
         return {}
     return {"d": d, "f": bsig.features(d), "sig": bsig.signals(d),
             "check": bsig.checklist(d), "now": bsig.stage_now(d),
-            "study": bsig.event_study(d), "hist": bsig.history(d)}
+            "study": bsig.event_study(d), "hist": bsig.history(d),
+            "events": bsig.recent_events(d)}
 
 
 def bundle(ticker: str) -> dict:
@@ -71,13 +72,34 @@ cols = st.columns(len(tickers))
 for col, tk in zip(cols, tickers):
     b = bundles[tk]
     now, c = b["now"], b["d"]["close"]
-    label, color, desc = STAGE[now["level"]]
+    label, _, desc = STAGE[now["level"]]
+    sig_name, color = bsig.SIGNAL[now["level"]]
+    badge = sig_name if now["level"] is None else f"{sig_name} · {label}"
     with col.container(border=True):
         # 이름과 배지를 한 줄에 — 칼럼으로 나누면 휴대폰 폭에서 배지가 다음 줄로 떨어진다
-        st.markdown(f"**{names.get(tk, tk)}** &nbsp; :{color}-badge[{label}]")
+        st.markdown(f"**{names.get(tk, tk)}** &nbsp; :{color}-badge[**{badge}**]")
         st.metric(f"종가 · {now['asof']:%m/%d}", f"{c.iloc[-1]:,.2f}", fmt_delta(c))
         st.markdown(steps_md(now["on"]))
         st.caption(desc)
+
+# --------------------------------------------------------------- 최근 신호 (알림 목록)
+events = pd.concat([bundles[t]["events"].assign(tk=t) for t in tickers], ignore_index=True)
+events = events.sort_values("date", ascending=False).head(8)
+with st.container(border=True):
+    st.markdown("**최근 매수·매도 신호** &nbsp;"
+                "<span style='opacity:.6;font-size:.85rem'>최근 1년 · 텔레그램 알림과 같은 기준 · "
+                "'신호 후'는 신호일 종가 대비 현재 가격 · 초록 = 신호 방향대로 움직임</span>", unsafe_allow_html=True)
+    if events.empty:
+        st.caption("최근 1년 안에 발생한 신호가 없습니다.")
+    for e in events.itertuples():
+        color = bsig.SIGNAL[e.key][1]
+        # 색은 '신호가 맞았나' — 매수 뒤 상승, 매도 뒤 하락이면 초록
+        right = (e.since < 0) if e.key == "sell_w" else (e.since >= 0)
+        tone = "green" if right else "red"
+        st.markdown(
+            f"`{e.date:%Y-%m-%d}` &nbsp; **{names.get(e.tk, e.tk).split(' ')[0]}** &nbsp; "
+            f":{color}-badge[{e.signal}] &nbsp; {e.stage} &nbsp;·&nbsp; 종가 {e.close:,.2f}"
+            f" &nbsp;·&nbsp; 신호 후 가격 :{tone}[{e.since:+.1%}]")
 
 # --------------------------------------------------------------- 상세
 st.write("")

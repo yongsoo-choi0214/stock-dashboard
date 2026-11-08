@@ -160,5 +160,5 @@ def blog_signals(ohlcv: pd.DataFrame, name: str, ticker: str, *,
         if url:
             body += f"\n{url}"
         out.append(Alert(f"blog:{ticker}:{key}", level[key],
-                         f"{name} {label}{tag}", body))
+                         f"{name} {bs.SIGNAL[key][0]} · {label}{tag}", body))
     return out

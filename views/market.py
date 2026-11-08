@@ -23,7 +23,8 @@ from src.research import snapshot as snapshot_mod
 from src.research import summary
 from src.research import vulnerability as vu
 from src.viz import charts, theme
-from src.viz.ui import close_of, fmt_delta, freshness, load, load_meta, ticker_names
+from src.viz.ui import (close_of, data_stamp, fmt_delta, freshness, load, load_meta,
+                       ticker_names)
 
 
 
@@ -185,6 +186,31 @@ ma_windows = _adv.multiselect("이동평균", [5, 20, 60, 120, 200],
 st.title("매크로 유동성 + 기술적 지표 대시보드")
 
 freshness(meta)
+
+
+@st.cache_data(ttl=3600)
+def _signal_line(stamp: float) -> str:
+    """레버리지 ETF 현재 신호 한 줄. 실패해도 대시보드는 계속(설계원칙 5)."""
+    from src.research import blog_signals as bsig
+    from src.viz.ui import ohlcv_of
+    parts = []
+    for i in settings.series_for("yfinance"):
+        if not i.get("signals"):
+            continue
+        d = ohlcv_of(load("prices"), f"YF.{i['ticker']}")
+        if len(d) < 150:
+            continue
+        parts.append(f"{i['ticker']} {bsig.SIGNAL[bsig.stage_now(d)['level']][0]}")
+    return " · ".join(parts)
+
+
+try:
+    _line = _signal_line(data_stamp())
+except Exception as e:                       # noqa: BLE001 — 부가 정보라 삼키되 남긴다
+    _line = ""
+    print(f"신호 요약 실패: {type(e).__name__}: {e}")
+if _line:
+    st.page_link("views/leverage.py", label=f"레버리지 ETF 신호 — {_line}", icon="📈")
 
 if prices.empty and macro.empty:
     st.error("데이터가 비어 있습니다. `python -m src.etl.run_all` 을 실행하세요.")

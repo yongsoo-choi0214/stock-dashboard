@@ -141,3 +141,10 @@ def test_us_market_open():
     assert not us_market_open(ts("2026-11-09 09:00"))      # 개장 전
     assert not us_market_open(ts("2026-11-09 16:30"))      # 마감 후
     assert not us_market_open(ts("2026-11-08 12:00"))      # 일요일
+
+
+def test_recent_events(soxl):
+    ev = bs.recent_events(soxl.loc[:"2025-04-30"], days=60)
+    assert {"pit", "obv_gold"} <= set(ev["key"])
+    assert ev["date"].is_monotonic_decreasing
+    assert set(ev["signal"]) <= {"매수 준비", "매수 신호", "매도 신호"}
