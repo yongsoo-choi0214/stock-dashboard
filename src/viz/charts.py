@@ -437,7 +437,8 @@ def monthly_seasonality(stats: pd.DataFrame, *, mode: str = "light",
 #: 확인 매수(3단계)는 둘 다 매수라 같은 색, 모양(채움/빈 삼각형)과 글자로 구분한다.
 SIGNAL_STYLE = {
     "pit": (1, "circle", "매수 준비 (1단계)", None),
-    "obv_gold": (2, "triangle-up", "저점 매수 (2단계)", "저점매수"),
+    "mouth": (2, "triangle-up", "저점 매수 · DMI (2단계)", "저점매수"),
+    "obv_gold": (2, "diamond", "저점 매수 · OBV (2단계)", "저점매수"),
     "di_gold": (2, "triangle-up-open", "확인 매수 (3단계)", "확인매수"),
     "sell_w": (7, "triangle-down", "매도 신호", "매도"),
 }
@@ -534,7 +535,7 @@ def blog_signal_legend_html(mode: str = "light") -> str:
     """blog_signal_panel 의 범례. 폭에 맞춰 줄바꿈되는 HTML 한 덩어리."""
     p = theme.palette(mode)
     pos, neg = _diverging(mode)
-    glyph = {"circle": "●", "triangle-up": "▲", "triangle-up-open": "△",
+    glyph = {"circle": "●", "triangle-up": "▲", "triangle-up-open": "△", "diamond": "◆",
              "triangle-down": "▼"}
     items = [f"<span style='color:{p['series'][0]}'>━</span> 종가"]
     items += [f"<span style='color:{p['series'][slot]}'>{glyph[sym]}</span> {label}"

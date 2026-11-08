@@ -151,7 +151,8 @@ def blog_signals(ohlcv: pd.DataFrame, name: str, ticker: str, *,
     tag = " (잠정·장중)" if provisional else ""
     stats = (f"종가 {f.close:,.2f} · RSI {f.rsi:.1f} · Slow%K {f.sk:.1f} · "
              f"MDI−PDI {f.spread:.1f}")
-    level = {"pit": "info", "obv_gold": "warn", "di_gold": "warn", "sell_w": "warn"}
+    level = {"pit": "info", "mouth": "warn", "obv_gold": "warn", "di_gold": "warn",
+             "sell_w": "warn"}
     out = []
     for key, label, desc in bs.STAGES:
         if not now["on"].get(key):

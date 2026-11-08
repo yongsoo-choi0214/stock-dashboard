@@ -81,6 +81,13 @@ def test_blog_buy_dates(soxl):
     assert not f.loc["2025-04-04", "obv_gold"]
     assert f.loc["2025-04-07", "obv_gold"]
     assert f.loc["2025-04-03":"2025-04-04", "mouth_max"].any()   # 입 최대
+    # 댓글: 웅덩이 + ADX 데드 '후' + 입 최대 → 4/4 매수 타이밍 (ADX 데드는 3/24~28 에 먼저)
+    assert f.loc["2025-04-04", "mouth"]
+    assert not f.loc["2025-04-04", "adx_dead"]                 # 당일에는 ADX 가 오르는 중
+    # 3단계는 2단계(DMI) 셋업 뒤의 DI 골든크로스: 5/8
+    s = bs.signals(soxl)
+    assert s.loc["2025-04-11":"2025-06-30", "di_gold"][lambda x: x].index.tolist() == [
+        pd.Timestamp("2025-05-08")]
     assert f.loc["2025-04-04", "close"] == pytest.approx(8.73)
 
 
@@ -106,7 +113,7 @@ def test_signals_frame(soxl):
 
 def test_event_study_runs(soxl):
     es = bs.event_study(soxl, start="2024-03-01", n_perm=50)
-    assert len(es) == 3 and (es["N"] >= 0).all()
+    assert len(es) == 4 and (es["N"] >= 0).all()          # 1, 2(DMI), 2(OBV), 3
 
 
 def test_episodes_cooldown():
@@ -152,6 +159,6 @@ def test_recent_events(soxl):
 
 def test_compare_entries(soxl):
     r = bs.compare_entries(soxl, start="2024-03-01", holds=(20,))
-    assert list(r["table"].index) == ["저점 매수 (2단계)", "확인 매수 (3단계)"]
+    assert len(r["table"]) == 3 and r["table"].index[0].startswith("저점 매수")
     assert {"N", "20일 중앙", "20일 승률"} <= set(r["table"].columns)
     assert list(r["pairs"].columns) == ["저점 매수일", "확인 매수일", "확인 매수가 더 비싼 정도"]

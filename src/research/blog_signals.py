@@ -6,12 +6,19 @@
 - 블로그 주인 댓글(2026-11-04): Stoch·CCI·RSI 웅덩이 + ADX 데드 후 PDI·MDI 입 최대 → 매수,
   입을 닫으며 gold 날 때 → 더 확실한 매수
 
+원문의 조건은 모두 AND 다(연결어미 '~고', '~후', '~까지', '~나자마자'). 댓글의 두 매수 시점
+('입 최대' 와 '더 확실히 → gold')은 같은 셋업 위에서 언제 들어갈지의 선택이다.
+본문의 OBV 조건과 댓글의 ADX·DMI 조건을 함께 요구하는지는 원문에 없어 2단계를 두 갈래로 둔다.
+
 정량화(원문은 수치가 없어 해석이 들어간다 — 대시보드에 그대로 노출한다)
-- 웅덩이  : 최근 3일 안에 Slow %K(5,3,3)<20, RSI(14)<30, CCI(20)<-100 모두 발생
-- 입 최대 : MDI−PDI 가 최근 60일 최댓값 (MDI 우위), 최근 10일 안
-- OBV gold: OBV 가 9일 SMA 상향 돌파 (웅덩이 중, 최근 3일 안)
-- DI gold : 입 최대 이후 30거래일 안에 PDI 가 MDI 상향 돌파
-- 매도    : 주봉 Slow(10,5,5) 과매수(>80) 후 K<D, 그리고 OBV−signal 이격 축소
+- 1  과매도   : 최근 3일 안에 Slow %K(5,3,3)<20, RSI(14)<30, CCI(20)<-100 모두 발생
+- 2  DMI      : 1 + 직전 15거래일 안 ADX 데드(ADX<9일 평균) + MDI−PDI 60일 최대(최근 3일) — 댓글 '매수타이밍'
+- 2' OBV      : 1 + OBV 가 9일 SMA 상향 돌파(최근 3일) — 본문 2차 매수
+- 3  DI 골든  : 2(DMI) 이후 30거래일 안에 PDI 가 MDI 상향 돌파 — 댓글 '더 확실히'
+- 매도        : 주봉 Slow(10,5,5) 과매수(>80) 후 K<D, 그리고 OBV−signal 이격 축소
+
+2025-04 확인: ADX 데드 3/24~28 → 과매도·입 최대 4/3~4 (블로그 1차 매수 4/4) → OBV 골든 4/7(2차)
+→ DI 골든 5월 초. ADX 데드는 입 최대 '전에' 나온다 — 같은 날 조건으로 두면 이 매수일이 안 잡힌다.
 
 재현 확인(SOXL): 2025-04-04 웅덩이·OBV gold 없음 → 4/7 OBV gold (블로그 1·2차 매수일과 일치),
 주봉 매도 2025-08-04 (블로그 매도 8/8 과 같은 주).
@@ -45,6 +52,7 @@ class Params:
     spread_win: int = 60
     spread_recent: int = 10
     close_win: int = 30
+    adx_prior_win: int = 15          # 'ADX 가 데드난 후' — 입 최대 직전 몇 거래일 안에 데드가 있었나
     weekly_stoch: tuple[int, int, int] = (10, 5, 5)
 
 
@@ -52,10 +60,12 @@ class Params:
 STAGES: list[tuple[str, str, str]] = [
     ("pit", "1단계 과매도",
      "Stoch·CCI·RSI 동시 과매도. 블로그 1차 매수. 단독으로는 '떨어지는 칼'일 수 있음"),
+    ("mouth", "2단계 DMI 입 최대",
+     "과매도 + 직전 ADX 데드 + MDI−PDI 입 최대. 댓글의 매수 타이밍"),
     ("obv_gold", "2단계 OBV 골든크로스",
-     "과매도 중 거래량이 돌아섬. 블로그 2차(본격) 매수"),
+     "과매도 + OBV 골든크로스. 거래량이 돌아섬. 블로그 본문 2차(본격) 매수"),
     ("di_gold", "3단계 DI 골든크로스",
-     "MDI−PDI 입 최대 이후 PDI가 MDI를 상향 돌파. 댓글의 '더 확실한' 매수"),
+     "DMI 2단계 이후 입이 닫히며 PDI가 MDI를 상향 돌파. 댓글의 '더 확실한' 매수"),
     ("sell_w", "매도 신호",
      "주봉 Stoch 과매수 후 꺾임 + OBV 이격 축소. 블로그 매도 규칙"),
 ]
@@ -68,6 +78,7 @@ SIGNAL: dict[str | None, tuple[str, str]] = {
     # 2단계는 바닥 근처에서 먼저 사는 신호, 3단계는 반등을 확인하고 사는 신호다.
     # 사례 검증(2011~): 같은 하락 국면에서 3단계 매수가가 2단계보다 대개 비쌌고(SOXL 8쌍 중 7, TQQQ 6),
     # 2단계는 드물고 매수 뒤 흔들림이 더 컸다.
+    "mouth": ("저점 매수", "green"),
     "obv_gold": ("저점 매수", "green"),
     "di_gold": ("확인 매수", "blue"),
     "sell_w": ("매도 신호", "red"),
@@ -133,12 +144,18 @@ def features(df: pd.DataFrame, p: Params = Params()) -> pd.DataFrame:
     f["mouth_max"] = (f["spread"] >= smax - 1e-9) & (f["spread"] > 0)
     f["mouth_recent"] = _recent(f["mouth_max"], p.spread_recent)
     f["adx_dead"] = f["adx"] < f["adx_sig"]
+    # '데드난 후': 오늘이 아니라 직전 adx_prior_win 거래일 안에 데드였던 날이 있어야 한다
+    f["adx_dead_prior"] = _recent(f["adx_dead"].shift(1, fill_value=False), p.adx_prior_win)
+    f["mouth"] = f["pit"] & _recent(f["mouth_max"], w) & f["adx_dead_prior"]
 
     pos = np.arange(len(f), dtype=float)
     last = pd.Series(np.where(f["mouth_max"], pos, np.nan), index=f.index).ffill()
     f["days_since_mouth"] = pos - last
+    last_setup = pd.Series(np.where(f["mouth"], pos, np.nan), index=f.index).ffill()
+    f["days_since_setup"] = pos - last_setup
     f["di_cross"] = osc.cross_up(f["pdi"], f["mdi"])
-    f["di_gold"] = f["di_cross"] & (f["days_since_mouth"] <= p.close_win)
+    # 3단계는 독립 조건이 아니다 — '입을 벌리다가 닫으러 가면서' 는 2단계(DMI) 의 그 입이다
+    f["di_gold"] = f["di_cross"] & (f["days_since_setup"] <= p.close_win)
     return f
 
 
@@ -175,7 +192,7 @@ def daily_sell(df: pd.DataFrame, p: Params = Params()) -> pd.Series:
 def signals(df: pd.DataFrame, p: Params = Params()) -> pd.DataFrame:
     """단계별 신호 bool 테이블 (STAGES 순서)."""
     f = features(df, p)
-    out = f[["pit", "obv_gold", "di_gold"]].copy()
+    out = f[["pit", "mouth", "obv_gold", "di_gold"]].copy()
     out["sell_w"] = daily_sell(df, p)
     return out.fillna(False).astype(bool)
 
@@ -194,7 +211,7 @@ def checklist(df: pd.DataFrame, p: Params = Params()) -> list[dict]:
          f"CCI {r.cci:.0f} (<{p.os_cci:.0f})"),
         ("DMI 입 최대 (MDI−PDI)", bool(r.mouth_recent),
          f"MDI−PDI {r.spread:.1f} (60일 최대 {f['spread'].tail(p.spread_win).max():.1f})"),
-        ("ADX 꺾임 (참고)", bool(r.adx_dead),
+        ("ADX 데드 (직전 15일 안)", bool(r.adx_dead_prior),
          f"ADX {r.adx:.1f} vs 신호선 {r.adx_sig:.1f}"),
         ("OBV 골든크로스", bool(_recent(f["obv_cross"], p.pit_win).iloc[-1]),
          ("최근 3일 안 신호선 상향 돌파" if bool(_recent(f["obv_cross"], p.pit_win).iloc[-1])
@@ -215,6 +232,8 @@ def stage_now(df: pd.DataFrame, p: Params = Params(), recent: int = 3) -> dict:
         level = "sell_w"
     elif on.get("di_gold"):
         level = "di_gold"
+    elif on.get("mouth"):
+        level = "mouth"
     elif on.get("obv_gold"):
         level = "obv_gold"
     elif on.get("pit"):
@@ -258,7 +277,7 @@ def event_study(df: pd.DataFrame, p: Params = Params(), start: str = "2011-01-01
     fwd = forward_returns(d, horizons).loc[start:]
     rng = np.random.default_rng(seed)
     rows = []
-    for key, label, _ in STAGES[:3]:
+    for key, label, _ in [s_ for s_ in STAGES if s_[0] != "sell_w"]:
         ep = episodes(sig[key])
         sub = fwd[ep]
         row = {"단계": label, "N": int(ep.sum())}
@@ -298,8 +317,8 @@ def history(df: pd.DataFrame, p: Params = Params(), start: str = "2011-01-01",
 
 def compare_entries(df: pd.DataFrame, p: Params = Params(), start: str = "2011-01-01",
                     holds=(60, 120), cooldown: int = 20) -> dict:
-    """저점 매수(2단계) vs 확인 매수(3단계) — 같은 조건(다음날 시가 매수, h거래일 보유)의 거래 성과
-    와, 같은 하락 국면 짝(2단계 뒤 60거래일 안에 3단계)의 매수가 차이.
+    """저점 매수(2단계 DMI·OBV) vs 확인 매수(3단계) — 같은 조건(다음날 시가 매수, h거래일 보유)의
+    거래 성과와, 같은 국면 짝(2단계 DMI 뒤 60거래일 안에 3단계)의 매수가 차이.
 
     반환: {"table": 단계별 요약 DataFrame, "pairs": 짝 DataFrame}
     """
@@ -308,9 +327,9 @@ def compare_entries(df: pd.DataFrame, p: Params = Params(), start: str = "2011-0
     dd = d.loc[start:]
     o, c, n = dd.open.to_numpy(), dd.close.to_numpy(), len(dd)
     rows = []
-    for key in ("obv_gold", "di_gold"):
+    for key in ("mouth", "obv_gold", "di_gold"):
         idx = np.flatnonzero(episodes(sig[key], cooldown).to_numpy())
-        row = {"신호": f"{SIGNAL[key][0]} ({LABEL[key].split()[0]})"}
+        row = {"신호": f"{SIGNAL[key][0]} · {LABEL[key]}"}
         for h in holds:
             r = np.array([c[i + 1 + h] / o[i + 1] - 1 for i in idx if i + 1 + h < n])
             mae = np.array([c[i + 1:i + 2 + h].min() / o[i + 1] - 1 for i in idx if i + 1 + h < n])
@@ -321,7 +340,7 @@ def compare_entries(df: pd.DataFrame, p: Params = Params(), start: str = "2011-0
             if h == holds[0]:
                 row["보유 중 최대하락(중앙)"] = float(np.median(mae)) if len(mae) else np.nan
         rows.append(row)
-    ep2 = episodes(sig["obv_gold"], cooldown)
+    ep2 = episodes(sig["mouth"], cooldown)
     pairs = []
     for i in np.flatnonzero(ep2.to_numpy()):
         later = np.flatnonzero(sig["di_gold"].to_numpy()[i + 1:i + 61])
