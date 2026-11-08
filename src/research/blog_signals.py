@@ -50,13 +50,13 @@ class Params:
 
 #: 신호 단계 — (컬럼, 라벨, 설명). 대시보드·알림이 같은 정의를 쓴다.
 STAGES: list[tuple[str, str, str]] = [
-    ("pit", "① 3중 웅덩이",
+    ("pit", "1단계 웅덩이",
      "Stoch·CCI·RSI 동시 과매도. 블로그 1차 매수. 단독으로는 '떨어지는 칼'일 수 있음"),
-    ("obv_gold", "② 웅덩이 + OBV gold",
+    ("obv_gold", "2단계 OBV gold",
      "과매도 중 거래량이 돌아섬. 블로그 2차(본격) 매수"),
-    ("di_gold", "③ 입 닫으며 DI gold",
+    ("di_gold", "3단계 DI gold",
      "MDI−PDI 입 최대 이후 PDI가 MDI를 상향 돌파. 댓글의 '더 확실한' 매수"),
-    ("sell_w", "매도: 주봉 상단 웅덩이",
+    ("sell_w", "매도 신호",
      "주봉 Stoch 과매수 후 꺾임 + OBV 이격 축소. 블로그 매도 규칙"),
 ]
 LABEL = {k: lab for k, lab, _ in STAGES}

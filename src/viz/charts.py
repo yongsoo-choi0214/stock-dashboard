@@ -434,10 +434,10 @@ def monthly_seasonality(stats: pd.DataFrame, *, mode: str = "light",
 
 #: 블로그 신호 단계 → 색 슬롯 / 마커. 단계가 개체이므로 색은 단계를 따라간다.
 SIGNAL_STYLE = {
-    "pit": (1, "circle", "① 3중 웅덩이"),
-    "obv_gold": (2, "triangle-up", "② 웅덩이 + OBV gold"),
-    "di_gold": (6, "triangle-up", "③ 입 닫으며 DI gold"),
-    "sell_w": (7, "triangle-down", "매도: 주봉 상단 웅덩이"),
+    "pit": (1, "circle", "1단계 웅덩이"),
+    "obv_gold": (2, "triangle-up", "2단계 OBV gold"),
+    "di_gold": (6, "triangle-up", "3단계 DI gold"),
+    "sell_w": (7, "triangle-down", "매도 신호"),
 }
 
 

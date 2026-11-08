@@ -119,3 +119,23 @@ def test_dashboard_survives_vulnerability_failure(has_data, monkeypatch):
     assert "개요" in labels and "데이터" in labels
     # 실패 사실은 숨기지 않는다
     assert any("취약성 지수 계산 실패" in e.value for e in at.error)
+
+
+def test_leverage_page(has_data):
+    """레버리지 ETF 신호 페이지가 독립 페이지로 렌더되고 종목 전환이 된다."""
+    at = _run()
+    at.switch_page("views/leverage.py").run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.title[0].value == "레버리지 ETF 신호"
+    if not store.read("prices")["ticker"].eq("YF.SOXL").any():
+        return                                        # 데이터 없으면 안내만 확인
+    assert len(at.metric) >= 6
+    at.segmented_control(key="sig_tk").set_value("YF.TQQQ").run()
+    assert not at.exception, [e.value for e in at.exception]
+    at.segmented_control(key="sig_span").set_value("전체").run()
+    assert not at.exception, [e.value for e in at.exception]
+
+
+def test_market_page_has_no_leverage_tab(has_data):
+    at = _run()
+    assert "레버리지 ETF 신호" not in [t.label for t in at.tabs]

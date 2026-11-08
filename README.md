@@ -105,15 +105,18 @@ Secrets 는 **넣지 않는다.** 앱은 커밋된 parquet 만 읽으므로 API 
 - **투자자예탁금은 ECOS `901Y056`(증시주변자금동향)에 있고 월간만 제공**된다.
   일간이 필요하면 KOFIA(freesis)를 붙여야 한다.
 
-## 레버리지 ETF 신호 탭 (SOXL · TQQQ)
+## 레버리지 ETF 신호 페이지 (SOXL · TQQQ)
+
+`app.py` 는 라우터다. 페이지는 `views/market.py`(기본, `/`)와 `views/leverage.py`(`/leverage`).
+폴더가 `pages/` 가 아닌 이유: Streamlit 이 옛 자동 멀티페이지를 켜서 라우터를 건너뛴다.
 
 '현세의 주식' 블로그 글(2025-08-19)과 댓글(2026-11-04)의 보조지표 바닥 매수 규칙을 수치화했다.
 
 | 단계 | 조건 (일봉) |
 |---|---|
-| ① 3중 웅덩이 | 최근 3일 안 Slow %K(5,3,3)<20 · RSI(14)<30 · CCI(20)<−100 |
-| ② 웅덩이 + OBV gold | ① 중 OBV 가 9일 SMA 상향 돌파 (블로그 2차 매수) |
-| ③ 입 닫으며 DI gold | MDI−PDI 60일 최대 이후 30거래일 안 PDI>MDI 교차 |
+| 1단계 웅덩이 | 최근 3일 안 Slow %K(5,3,3)<20 · RSI(14)<30 · CCI(20)<−100 |
+| 2단계 OBV gold | ① 중 OBV 가 9일 SMA 상향 돌파 (블로그 2차 매수) |
+| 3단계 DI gold | MDI−PDI 60일 최대 이후 30거래일 안 PDI>MDI 교차 |
 | 매도 | 주봉 Slow(10,5,5) 과매수 후 K<D + OBV 이격 축소 |
 
 - 코드: `src/research/blog_signals.py` (순수함수), `src/indicators/oscillators.py`
