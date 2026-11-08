@@ -19,11 +19,13 @@ from src.viz.ui import (data_stamp, fmt_delta, freshness, load, load_meta, mode,
 STAGE = {
     None: ("관망", "gray", "매수 조건이 아직 없습니다"),
     "pit": ("1단계", "orange", "과매도 웅덩이 · 1차 매수 구간, 확인 신호 대기"),
-    "obv_gold": ("2단계", "green", "웅덩이 + OBV gold · 블로그 2차(본격) 매수 조건"),
-    "di_gold": ("3단계", "green", "입 닫으며 DI gold · 댓글의 '더 확실한' 매수 조건"),
+    "obv_gold": ("2단계", "green", "웅덩이 + OBV gold · 바닥 근처에서 먼저 사는 신호 "
+                 "(싸게 사는 대신 드물고, 산 뒤 흔들림이 큼)"),
+    "di_gold": ("3단계", "blue", "입 닫으며 DI gold · 반등을 확인하고 사는 신호 "
+                "(자주 나오지만 대개 2단계보다 비싸게 삼)"),
     "sell_w": ("매도", "red", "주봉 상단 웅덩이 · 블로그 매도 조건"),
 }
-STEPS = [("pit", "1 웅덩이"), ("obv_gold", "2 OBV gold"), ("di_gold", "3 DI gold")]
+STEPS = [("pit", "1 준비"), ("obv_gold", "2 저점 매수"), ("di_gold", "3 확인 매수")]
 
 
 @st.cache_data(ttl=3600)
@@ -34,7 +36,7 @@ def _bundle(ticker: str, stamp: float) -> dict:
     return {"d": d, "f": bsig.features(d), "sig": bsig.signals(d),
             "check": bsig.checklist(d), "now": bsig.stage_now(d),
             "study": bsig.event_study(d), "hist": bsig.history(d),
-            "events": bsig.recent_events(d)}
+            "events": bsig.recent_events(d), "cmp": bsig.compare_entries(d)}
 
 
 def bundle(ticker: str) -> dict:
@@ -136,6 +138,8 @@ if span == "전체":
 else:
     days = {"6개월": 182, "1년": 365, "3년": 365 * 3}[span]
     view = f.loc[f.index >= f.index[-1] - pd.Timedelta(days=days)]
+st.markdown(f"**{names.get(tk, tk)} 신호 차트**")
+st.markdown(charts.blog_signal_legend_html(mode()), unsafe_allow_html=True)
 st.plotly_chart(charts.blog_signal_panel(view, sig.loc[view.index],
                                          f"{names.get(tk, tk)} 신호 패널", mode=mode()),
                 width="stretch")
@@ -169,6 +173,26 @@ with st.expander("이 규칙은 과거에 얼마나 맞았나 (2011~)"):
         "- 3중 웅덩이는 사실상 RSI<30 하나와 같은 정보입니다(세 지표 모두 같은 가격에서 계산). "
         "정보를 더하는 것은 OBV·DI 확인 신호입니다.\n"
         "- 원 규칙에는 손절 조건이 없습니다.")
+
+with st.expander("저점 매수(2단계) vs 확인 매수(3단계), 어느 쪽이 나았나"):
+    cmp_ = b["cmp"]
+    t = cmp_["table"].copy()
+    pct_cols = [k for k in t.columns if k != "N"]
+    t[pct_cols] = t[pct_cols] * 100
+    st.dataframe(t, width="stretch", column_config={
+        k: st.column_config.NumberColumn(k, format="%.1f%%") for k in pct_cols})
+    pr = cmp_["pairs"]
+    if len(pr):
+        prem = pr["확인 매수가 더 비싼 정도"]
+        st.caption(
+            f"같은 하락 국면에서 둘 다 뜬 {len(pr)}번 중 {int((prem > 0).sum())}번은 확인 매수가 더 "
+            f"비쌌습니다(중앙값 {prem.median():+.0%}). 신호 다음날 시가 매수, 정해진 기간 보유 기준.")
+    st.markdown(
+        "- **저점 매수(2단계)**: 바닥 근처에서 먼저 삽니다. 대개 더 싸지만 드물고(14년 10회 안팎), "
+        "너무 일찍 떠서 산 뒤 크게 흔들리는 경우가 있습니다.\n"
+        "- **확인 매수(3단계)**: 반등을 확인하고 삽니다. 자주 나오고 덜 흔들리지만 대개 더 비싸게 삽니다.\n"
+        "- 2011년 이후 검증: TQQQ 는 저점 매수가 뚜렷하게 나았고(우연일 가능성 낮음), "
+        "SOXL 은 표본이 적어 우열을 가릴 수 없었습니다.")
 
 with st.expander("신호 발생 이력"):
     h = b["hist"].copy()

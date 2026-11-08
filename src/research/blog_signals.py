@@ -65,8 +65,11 @@ LABEL = {k: lab for k, lab, _ in STAGES}
 SIGNAL: dict[str | None, tuple[str, str]] = {
     None: ("신호 없음", "gray"),
     "pit": ("매수 준비", "orange"),
-    "obv_gold": ("매수 신호", "green"),
-    "di_gold": ("매수 신호", "green"),
+    # 2단계는 바닥 근처에서 먼저 사는 신호, 3단계는 반등을 확인하고 사는 신호다.
+    # 사례 검증(2011~): 같은 하락 국면에서 3단계 매수가가 2단계보다 대개 비쌌고(8쌍 중 6),
+    # 2단계는 드물고 매수 뒤 흔들림이 더 컸다.
+    "obv_gold": ("저점 매수", "green"),
+    "di_gold": ("확인 매수", "blue"),
     "sell_w": ("매도 신호", "red"),
 }
 
@@ -291,3 +294,41 @@ def history(df: pd.DataFrame, p: Params = Params(), start: str = "2011-01-01",
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames).sort_index(ascending=False)
+
+
+def compare_entries(df: pd.DataFrame, p: Params = Params(), start: str = "2011-01-01",
+                    holds=(60, 120), cooldown: int = 20) -> dict:
+    """저점 매수(2단계) vs 확인 매수(3단계) — 같은 조건(다음날 시가 매수, h거래일 보유)의 거래 성과
+    와, 같은 하락 국면 짝(2단계 뒤 60거래일 안에 3단계)의 매수가 차이.
+
+    반환: {"table": 단계별 요약 DataFrame, "pairs": 짝 DataFrame}
+    """
+    d = _ohlcv(df)
+    sig = signals(d, p).loc[start:]
+    dd = d.loc[start:]
+    o, c, n = dd.open.to_numpy(), dd.close.to_numpy(), len(dd)
+    rows = []
+    for key in ("obv_gold", "di_gold"):
+        idx = np.flatnonzero(episodes(sig[key], cooldown).to_numpy())
+        row = {"신호": f"{SIGNAL[key][0]} ({LABEL[key].split()[0]})"}
+        for h in holds:
+            r = np.array([c[i + 1 + h] / o[i + 1] - 1 for i in idx if i + 1 + h < n])
+            mae = np.array([c[i + 1:i + 2 + h].min() / o[i + 1] - 1 for i in idx if i + 1 + h < n])
+            row["N"] = len(r)
+            row[f"{h}일 중앙"] = float(np.median(r)) if len(r) else np.nan
+            row[f"{h}일 승률"] = float((r > 0).mean()) if len(r) else np.nan
+            row[f"{h}일 최악"] = float(r.min()) if len(r) else np.nan
+            if h == holds[0]:
+                row["보유 중 최대하락(중앙)"] = float(np.median(mae)) if len(mae) else np.nan
+        rows.append(row)
+    ep2 = episodes(sig["obv_gold"], cooldown)
+    pairs = []
+    for i in np.flatnonzero(ep2.to_numpy()):
+        later = np.flatnonzero(sig["di_gold"].to_numpy()[i + 1:i + 61])
+        if len(later) and i + 1 < n:
+            j = i + 1 + later[0]
+            if j + 1 < n:
+                pairs.append({"저점 매수일": dd.index[i], "확인 매수일": dd.index[j],
+                              "확인 매수가 더 비싼 정도": o[j + 1] / o[i + 1] - 1})
+    return {"table": pd.DataFrame(rows).set_index("신호"),
+            "pairs": pd.DataFrame(pairs, columns=["저점 매수일", "확인 매수일", "확인 매수가 더 비싼 정도"])}

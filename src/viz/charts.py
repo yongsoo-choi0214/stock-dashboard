@@ -433,12 +433,12 @@ def monthly_seasonality(stats: pd.DataFrame, *, mode: str = "light",
 
 
 #: 블로그 신호 단계 → (색 슬롯, 마커, 범례 이름, 마커 옆 글자).
-#: 색은 '매수=초록, 매도=빨강, 준비=주황' 으로 의미를 따른다. 2·3단계는 같은 매수라 같은 색,
-#: 모양(채움/빈 삼각형)으로 구분한다.
+#: 색은 '매수=초록, 매도=빨강, 준비=주황' 으로 의미를 따른다. 저점 매수(2단계)와
+#: 확인 매수(3단계)는 둘 다 매수라 같은 색, 모양(채움/빈 삼각형)과 글자로 구분한다.
 SIGNAL_STYLE = {
     "pit": (1, "circle", "매수 준비 (1단계)", None),
-    "obv_gold": (2, "triangle-up", "매수 신호 (2단계)", "매수"),
-    "di_gold": (2, "triangle-up-open", "매수 신호 (3단계)", "매수"),
+    "obv_gold": (2, "triangle-up", "저점 매수 (2단계)", "저점매수"),
+    "di_gold": (2, "triangle-up-open", "확인 매수 (3단계)", "확인매수"),
     "sell_w": (7, "triangle-down", "매도 신호", "매도"),
 }
 
@@ -520,11 +520,30 @@ def blog_signal_panel(f: pd.DataFrame, sig: pd.DataFrame, title: str, *,
     fig.update_yaxes(title_text="오실레이터", range=[0, 100], row=2, col=1)
     fig.update_yaxes(title_text="DI 스프레드", row=3, col=1)
     fig.update_yaxes(title_text="OBV 이격", showticklabels=False, row=4, col=1)
-    fig.update_layout(title=title, bargap=0)
+    fig.update_layout(bargap=0)
     fig.update_xaxes(rangeslider_visible=False)
-    fig = theme.apply(fig, mode, height=860)
-    # 범례는 차트 위에 — 아래에 두면 화면을 잘라 볼 때 마커 뜻이 빠진다
-    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.01,
-                                  xanchor="left", x=0),
-                      margin=dict(t=90))
+    fig = theme.apply(fig, mode, height=820)
+    # 범례는 Plotly 밖(페이지의 HTML)에서 그린다 — Plotly 가로 범례는 좁은 화면에서
+    # 여러 줄로 접히며 제목·그래프를 덮는다. title 인자는 호버·내보내기용으로만 남긴다.
+    fig.update_layout(showlegend=False, title_text="", margin=dict(t=16),
+                      meta={"title": title})
     return fig
+
+
+def blog_signal_legend_html(mode: str = "light") -> str:
+    """blog_signal_panel 의 범례. 폭에 맞춰 줄바꿈되는 HTML 한 덩어리."""
+    p = theme.palette(mode)
+    pos, neg = _diverging(mode)
+    glyph = {"circle": "●", "triangle-up": "▲", "triangle-up-open": "△",
+             "triangle-down": "▼"}
+    items = [f"<span style='color:{p['series'][0]}'>━</span> 종가"]
+    items += [f"<span style='color:{p['series'][slot]}'>{glyph[sym]}</span> {label}"
+              for slot, sym, label, _ in SIGNAL_STYLE.values()]
+    items += [f"<span style='color:{p['series'][5]}'>━</span> RSI(14)",
+              f"<span style='color:{p['series'][3]}'>━</span> Slow %K",
+              f"<span style='color:{p['series'][6]}'>━</span> MDI−PDI",
+              f"OBV−신호선 <span style='color:{pos}'>▮</span>위 "
+              f"<span style='color:{neg}'>▮</span>아래"]
+    spans = "".join(f"<span style='white-space:nowrap;margin-right:14px'>{i}</span>"
+                    for i in items)
+    return f"<div style='font-size:.82rem;line-height:1.9;opacity:.85'>{spans}</div>"

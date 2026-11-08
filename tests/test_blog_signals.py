@@ -147,4 +147,11 @@ def test_recent_events(soxl):
     ev = bs.recent_events(soxl.loc[:"2025-04-30"], days=60)
     assert {"pit", "obv_gold"} <= set(ev["key"])
     assert ev["date"].is_monotonic_decreasing
-    assert set(ev["signal"]) <= {"매수 준비", "매수 신호", "매도 신호"}
+    assert set(ev["signal"]) <= {"매수 준비", "저점 매수", "확인 매수", "매도 신호"}
+
+
+def test_compare_entries(soxl):
+    r = bs.compare_entries(soxl, start="2024-03-01", holds=(20,))
+    assert list(r["table"].index) == ["저점 매수 (2단계)", "확인 매수 (3단계)"]
+    assert {"N", "20일 중앙", "20일 승률"} <= set(r["table"].columns)
+    assert list(r["pairs"].columns) == ["저점 매수일", "확인 매수일", "확인 매수가 더 비싼 정도"]
