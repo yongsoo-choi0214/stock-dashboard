@@ -17,6 +17,7 @@ import sys
 import pandas as pd
 import requests
 
+from config import settings
 from config.settings import DATA_DIR
 from src import store
 from src.alerts import rules
@@ -49,10 +50,12 @@ def write_state(keys: set[str]) -> None:
 
 
 # ------------------------------------------------------------------ 평가
-def evaluate() -> list[Alert]:
+def evaluate(intraday: bool = False) -> list[Alert]:
     """현재 데이터에서 참인 모든 알림 상태."""
     macro, prices = store.read("macro"), store.read("prices")
     out: list[Alert] = []
+
+    out += _blog_signal_alerts(prices, intraday)
 
     out += rules.data_staleness(store.read_meta())
 
@@ -80,6 +83,25 @@ def evaluate() -> list[Alert]:
         out += rules.deposit_extreme(lq.deposit_ratio(dep, mcap.resample("ME").last()))
 
     out += _vulnerability_alerts(macro, prices, ms)
+    return out
+
+
+def _blog_signal_alerts(prices: pd.DataFrame, intraday: bool) -> list[Alert]:
+    """레버리지 ETF 블로그 규칙 신호. 대상은 series.yaml 의 signals: true (설계원칙 3)."""
+    out: list[Alert] = []
+    for item in settings.series_for("yfinance"):
+        if not item.get("signals"):
+            continue
+        tk = f"YF.{item['ticker']}"
+        d = prices[prices["ticker"] == tk].set_index("date").sort_index()
+        if d.empty:
+            continue
+        try:
+            out += rules.blog_signals(
+                d[["open", "high", "low", "close", "volume"]].astype("float64"),
+                item["name"], tk, provisional=intraday, url=settings.DASHBOARD_URL)
+        except Exception as e:          # 한 종목의 실패가 전체 알림을 죽이지 않는다
+            print(f"  [{tk}] 신호 계산 실패: {type(e).__name__}: {e}")
     return out
 
 
@@ -146,6 +168,8 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="전송하지 않고 출력만")
     ap.add_argument("--test", action="store_true", help="연결 확인 메시지 1건 전송")
     ap.add_argument("--reset", action="store_true", help="상태 초기화(다음 실행에 전부 재전송)")
+    ap.add_argument("--intraday", action="store_true",
+                    help="미국 장중 실행 — 레버리지 ETF 신호에 (잠정) 표시")
     a = ap.parse_args()
 
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -166,7 +190,7 @@ def main() -> int:
         print("전송 성공" if ok else "전송 실패")
         return 0 if ok else 1
 
-    alerts = evaluate()
+    alerts = evaluate(intraday=a.intraday)
     active = {al.key for al in alerts}
     previous = read_state()
     fresh = [al for al in alerts if al.key not in previous]

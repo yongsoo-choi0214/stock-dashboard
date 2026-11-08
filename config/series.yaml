@@ -297,6 +297,16 @@ yfinance:
   - ticker: "CL=F"
     name: WTI 유가
 
+  # --- 레버리지 ETF: 블로그 매매 규칙 신호 대상 (signals: true) ---
+  #     src/research/blog_signals.py · 탭 "레버리지 ETF 신호" · 텔레그램 알림이
+  #     signals: true 인 티커만 본다. 종목을 늘리려면 여기에 한 줄 추가하면 된다.
+  - ticker: "SOXL"
+    name: SOXL (반도체 3배)
+    signals: true
+  - ticker: "TQQQ"
+    name: TQQQ (나스닥100 3배)
+    signals: true
+
 
 # 코스피 규모별·업종별 지수 — 시장 폭(breadth) 계산용.
 # 지수는 pykrx 로 받는다(FDR 은 업종지수를 주지 않는다).

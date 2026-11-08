@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -429,3 +430,86 @@ def monthly_seasonality(stats: pd.DataFrame, *, mode: str = "light",
     fig.update_yaxes(title_text="월 평균 수익률 (%)")
     fig.update_layout(title="월별 계절성", bargap=0.25)
     return theme.apply(fig, mode, height=height)
+
+
+#: 블로그 신호 단계 → 색 슬롯 / 마커. 단계가 개체이므로 색은 단계를 따라간다.
+SIGNAL_STYLE = {
+    "pit": (1, "circle", "① 3중 웅덩이"),
+    "obv_gold": (2, "triangle-up", "② 웅덩이 + OBV gold"),
+    "di_gold": (6, "triangle-up", "③ 입 닫으며 DI gold"),
+    "sell_w": (7, "triangle-down", "매도: 주봉 상단 웅덩이"),
+}
+
+
+def blog_signal_panel(f: pd.DataFrame, sig: pd.DataFrame, title: str, *,
+                      mode: str = "light", log_y: bool = True) -> go.Figure:
+    """블로그 매매 규칙 4단 패널.
+
+    1단 가격(로그) + 단계별 신호 마커 / 2단 RSI·Slow %K / 3단 MDI−PDI (입 벌림)
+    / 4단 OBV − 신호선. f 는 blog_signals.features(), sig 는 signals() 결과.
+    """
+    p = theme.palette(mode)
+    c = f["close"]
+    fig = make_subplots(rows=4, cols=1, shared_xaxes=True,
+                        row_heights=[0.46, 0.2, 0.17, 0.17], vertical_spacing=0.035)
+
+    fig.add_trace(go.Scatter(x=c.index, y=c, name="종가", mode="lines",
+                             line=dict(color=p["series"][0], width=2),
+                             hovertemplate="%{y:,.2f}<extra>종가</extra>"),
+                  row=1, col=1)
+    for key, (slot, symbol, label) in SIGNAL_STYLE.items():
+        if key not in sig:
+            continue
+        on = sig[key].reindex(c.index, fill_value=False)
+        if not on.any():
+            continue
+        y = c[on] * (1.08 if key == "sell_w" else 0.92)   # 선과 겹치지 않게 띄운다
+        fig.add_trace(go.Scatter(
+            x=y.index, y=y, name=label, mode="markers",
+            marker=dict(color=p["series"][slot], symbol=symbol,
+                        size=7 if key == "pit" else 11,
+                        line=dict(color=p["surface"], width=1.5)),
+            customdata=c[on],
+            hovertemplate="종가 %{customdata:,.2f}<extra>" + label + "</extra>"),
+            row=1, col=1)
+
+    fig.add_trace(go.Scatter(x=f.index, y=f["rsi"], name="RSI(14)", mode="lines",
+                             line=dict(color=p["series"][5], width=1.6),
+                             hovertemplate="%{y:.1f}<extra>RSI</extra>"), row=2, col=1)
+    fig.add_trace(go.Scatter(x=f.index, y=f["sk"], name="Slow %K", mode="lines",
+                             line=dict(color=p["series"][3], width=1.6),
+                             hovertemplate="%{y:.1f}<extra>Slow %K</extra>"), row=2, col=1)
+    for level in (20, 30, 80):
+        fig.add_hline(y=level, line=dict(color=p["muted"], width=1, dash="dot"),
+                      row=2, col=1)
+
+    fig.add_trace(go.Scatter(x=f.index, y=f["spread"], name="MDI − PDI (입 벌림)",
+                             mode="lines", line=dict(color=p["series"][6], width=1.6),
+                             hovertemplate="%{y:.1f}<extra>MDI−PDI</extra>"),
+                  row=3, col=1)
+    fig.add_hline(y=0, line=dict(color=p["axis"], width=1), row=3, col=1)
+
+    gap = f["obv"] - f["obv_sig"]
+    pos, neg = _diverging(mode)
+    fig.add_trace(go.Bar(x=gap.index, y=gap, name="OBV − 신호선",
+                         marker=dict(color=[pos if v >= 0 else neg for v in gap.fillna(0)],
+                                     line=dict(width=0)),
+                         hovertemplate="%{y:,.0f}<extra>OBV−신호선</extra>"),
+                  row=4, col=1)
+
+    if log_y:
+        # 로그축 기본 눈금은 2·3·…·9 소숫자가 빽빽하다 — 1·2·5 단계로 직접 찍는다
+        lo, hi = float(c.min()), float(c.max())
+        ticks = [m * 10 ** e for e in range(int(np.floor(np.log10(lo))) - 1,
+                                             int(np.ceil(np.log10(hi))) + 1)
+                 for m in (1, 2, 5) if lo * 0.85 <= m * 10 ** e <= hi * 1.15]
+        fig.update_yaxes(type="log", tickvals=ticks,
+                         ticktext=[f"{t:,.0f}" if t >= 1 else f"{t:g}" for t in ticks],
+                         row=1, col=1)
+    fig.update_yaxes(title_text="가격", row=1, col=1)
+    fig.update_yaxes(title_text="오실레이터", range=[0, 100], row=2, col=1)
+    fig.update_yaxes(title_text="DI 스프레드", row=3, col=1)
+    fig.update_yaxes(title_text="OBV 이격", showticklabels=False, row=4, col=1)
+    fig.update_layout(title=title, bargap=0)
+    fig.update_xaxes(rangeslider_visible=False)
+    return theme.apply(fig, mode, height=860)

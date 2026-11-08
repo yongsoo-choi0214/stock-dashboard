@@ -87,7 +87,8 @@ def current_vol_percentile(close: pd.Series, *, window: int = 20,
 #: 한국장 마감(15:30 KST) **이후에** 거래되는 자산.
 #: 이들의 '오늘' 종가는 한국의 '내일'에야 반영된다.
 LATER_SESSION = {"YF.^GSPC", "YF.^IXIC", "YF.^SOX", "YF.^VIX",
-                 "YF.DX-Y.NYB", "YF.EEM", "YF.HG=F", "YF.CL=F"}
+                 "YF.DX-Y.NYB", "YF.EEM", "YF.HG=F", "YF.CL=F",
+                 "YF.SOXL", "YF.TQQQ"}
 
 
 def correlation(prices: pd.DataFrame, tickers: list[str], *,

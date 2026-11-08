@@ -1,0 +1,53 @@
+name: intraday-signals
+
+# 미국 정규장 동안 30분마다 yfinance 만 다시 받아 레버리지 ETF 신호를 평가한다.
+# - 그날 봉은 아직 종가가 아니므로 알림에 (잠정·장중) 이 붙는다.
+# - 확정은 update-data 의 아침 실행(KST 07:30)이 맡는다. 같은 key 라 중복 전송되지 않는다.
+# - 정규장: EDT 13:30–20:00 UTC / EST 14:30–21:00 UTC. 둘 다 덮도록 13–21시로 잡는다
+#   (장 밖 몇 회는 같은 데이터를 다시 받을 뿐 해가 없다). GitHub cron 은 수 분~수십 분 지연될 수 있다.
+on:
+  schedule:
+    - cron: "*/30 13-21 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # update-data 와 같은 그룹 — data/ 커밋을 두고 서로 다투지 않게 한다
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  signals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 미국 시세 수집
+        run: python -m src.etl.run_all --ignore-fail --only us_equity
+
+      - name: 신호 평가·텔레그램
+        continue-on-error: true
+        run: python -m src.alerts.run --intraday
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      - name: 변경분 커밋
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet || git commit -m "intraday: $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase --autostash || true
+          git push

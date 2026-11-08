@@ -13,6 +13,7 @@ from config import settings
 from src import store
 from src.indicators import liquidity as lq
 from src.indicators import technical as ta
+from src.research import blog_signals as bsig
 from src.research import breadth
 from src.research import flows_view as fv
 from src.research import ic as ic_mod
@@ -284,8 +285,9 @@ if not _kospi.empty:
 st.divider()
 
 # --------------------------------------------------------------- 탭
-tab_ov, tab_kr, tab_liq, tab_x, tab_res, tab_lev, tab_data = st.tabs(
-    ["개요", "한국 시장", "유동성", "크로스에셋", "연구", "신용·수급", "데이터"])
+tab_ov, tab_sig, tab_kr, tab_liq, tab_x, tab_res, tab_lev, tab_data = st.tabs(
+    ["개요", "레버리지 ETF 신호", "한국 시장", "유동성", "크로스에셋", "연구",
+     "신용·수급", "데이터"])
 
 with tab_ov:
     avail = [t for t in names if not close_of(prices, t).empty]
@@ -1114,3 +1116,161 @@ with tab_lev:
                 + ". 일간 순매수는 잡음이지만 **누적하면 구조가 보입니다** — "
                   "누가 몇 년째 팔고 누가 받아냈는지는 이 선에서만 드러납니다."
             )
+
+
+# --------------------------------------------------------------- 레버리지 ETF 신호
+@st.cache_data(ttl=1800)
+def signal_tickers() -> list[str]:
+    """series.yaml 에서 signals: true 인 yfinance 티커 (설계원칙 3)."""
+    return [f"YF.{i['ticker']}" for i in settings.series_for("yfinance")
+            if i.get("signals")]
+
+
+def ohlcv_of(prices: pd.DataFrame, ticker: str) -> pd.DataFrame:
+    d = prices[prices["ticker"] == ticker].set_index("date").sort_index()
+    return d[["open", "high", "low", "close", "volume"]].astype("float64")
+
+
+@st.cache_data(ttl=1800)
+def blog_signal_bundle(ticker: str) -> dict:
+    d = ohlcv_of(load("prices"), ticker)
+    if len(d) < 150:
+        return {}
+    return {"d": d, "f": bsig.features(d), "sig": bsig.signals(d),
+            "check": bsig.checklist(d), "now": bsig.stage_now(d),
+            "study": bsig.event_study(d), "hist": bsig.history(d)}
+
+
+STAGE_BANNER = {
+    None: ("info", "신호 없음 — 관망 구간",
+           "블로그 규칙상 매수 조건(과매도 웅덩이)이 아직 형성되지 않았습니다."),
+    "pit": ("warning", "① 3중 웅덩이 — 1차 매수 구간",
+            "Stoch·CCI·RSI 가 함께 과매도입니다. 블로그는 여기서 '조금 더 떨어질 것을 "
+            "감안하고' 1차 매수했습니다. 단독 신호의 SOXL 20일 성과는 기준선보다 나빴습니다 "
+            "(아래 검증 표). 확인 신호(②·③)를 기다리는 것이 규칙의 핵심입니다."),
+    "obv_gold": ("success", "② 웅덩이 + OBV gold — 블로그 2차(본격) 매수",
+                 "과매도 중 OBV 가 신호선을 상향 돌파했습니다. 블로그가 '정말 기회'라며 "
+                 "더 큰 수량을 산 조건입니다."),
+    "di_gold": ("success", "③ 입 닫으며 DI gold — 댓글의 '더 확실한' 매수",
+                "MDI−PDI 입이 최대로 벌어진 뒤 PDI 가 MDI 를 상향 돌파했습니다."),
+    "sell_w": ("error", "매도 — 주봉 상단 웅덩이 + OBV 이격 축소",
+               "블로그가 2025-08 에 매도한 조건입니다. 매도 후 더 오른 사례도 있습니다."),
+}
+
+with tab_sig:
+    st.subheader("레버리지 ETF 바닥 매수 신호 — '현세의 주식' 규칙")
+    st.caption(
+        "블로그 글(2025-08-19)과 블로그 주인 댓글(2026-11-04)의 보조지표 매매 규칙을 "
+        "수치로 옮긴 것입니다. 원문에 수치가 없는 부분은 해석이 들어가 있습니다(맨 아래 펼침). "
+        "**투자 권유가 아니라 규칙의 현재 상태와 과거 성과를 보여주는 화면입니다.**")
+
+    sig_tks = [t for t in signal_tickers() if not close_of(prices, t).empty]
+    if not sig_tks:
+        st.info("SOXL/TQQQ 데이터가 아직 없습니다. 다음 자동 수집(us_equity) 후 나타납니다.")
+    else:
+        tk = st.radio("종목", sig_tks, horizontal=True, key="sig_tk",
+                      format_func=lambda t: names.get(t, t))
+        b = blog_signal_bundle(tk)
+        if not b:
+            st.info("지표를 계산할 데이터가 부족합니다(150거래일 미만).")
+        else:
+            d, f, sig, now = b["d"], b["f"], b["sig"], b["now"]
+            asof = now["asof"]
+            us_last = meta.get("us_equity", {}).get("last_run", "")
+            kind, head, body = STAGE_BANNER[now["level"]]
+            getattr(st, kind)(f"**{head}**  \n{body}")
+            st.caption(
+                f"기준: {asof:%Y-%m-%d} 봉 (최근 3거래일 안에 켜진 가장 높은 단계) · "
+                f"수집 {str(us_last)[:16].replace('T', ' ')} KST. "
+                "미국 장중에는 30분마다 갱신되며, 그날 봉은 종가 확정 전까지 **잠정**입니다.")
+
+            c = d["close"]
+            hi52 = c.tail(252).max()
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("종가", f"{c.iloc[-1]:,.2f}", fmt_delta(c))
+            k2.metric("52주 고점 대비", f"{c.iloc[-1] / hi52 - 1:.1%}")
+            k3.metric("RSI(14)", f"{f['rsi'].iloc[-1]:.1f}")
+            k4.metric("MDI − PDI", f"{f['spread'].iloc[-1]:.1f}",
+                      help="하락 추세의 '입 벌림'. 클수록 매도 우위가 극단적")
+
+            st.markdown("##### 규칙 체크리스트 (현재 봉)")
+            cols = st.columns(2)
+            for i, r in enumerate(b["check"]):
+                cols[i % 2].markdown(
+                    f"{'✅' if r['ok'] else '⬜'} **{r['name']}** — {r['detail']}")
+            st.caption("과매도 3종은 최근 3일 안 발생 여부, OBV gold 는 최근 3일 안 교차 여부입니다.")
+
+            span = st.radio("차트 기간", ["6개월", "1년", "3년", "전체"], index=1,
+                            horizontal=True, key="sig_span")
+            if span == "전체":
+                view = f.loc["2011":]
+            else:
+                days = {"6개월": 182, "1년": 365, "3년": 365 * 3}[span]
+                view = f.loc[f.index >= f.index[-1] - pd.Timedelta(days=days)]
+            st.plotly_chart(
+                charts.blog_signal_panel(
+                    view, sig.loc[view.index], f"{names.get(tk, tk)} — 신호 패널",
+                    mode=mode),
+                width="stretch")
+
+            st.markdown("##### 이 규칙은 과거에 얼마나 맞았나 (2011~, 신호 다음날 시가 진입)")
+            es = b["study"].set_index("단계")
+            show = pd.DataFrame({
+                "N": es["N"],
+                "20일 후": es["20일 중앙값"] * 100,
+                "60일 후": es["60일 중앙값"] * 100,
+                "120일 후": es["120일 중앙값"] * 100,
+                "60일 상승확률": es["60일 상승확률"] * 100,
+                "20일 최대역행": es["20일 최대역행(중앙)"] * 100,
+                "우연일 확률(60일)": es["p60"],
+            })
+            pct = st.column_config.NumberColumn
+            st.dataframe(show, width="stretch", column_config={
+                **{c_: pct(c_, format="%.1f%%") for c_ in
+                   ["20일 후", "60일 후", "120일 후", "60일 상승확률", "20일 최대역행"]},
+                "우연일 확률(60일)": pct(
+                    "우연일 확률(60일)", format="%.2f",
+                    help="같은 수의 랜덤 진입일 중앙값이 신호 중앙값 이상일 확률. 작을수록 우연이 아님"),
+            })
+            base = es.iloc[0]
+            st.caption(
+                f"수익률은 중앙값. **기준선(아무 날이나 샀을 때)**: 20일 {base['20일 기준선']:.1%} · "
+                f"60일 {base['60일 기준선']:.1%} · 120일 {base['120일 기준선']:.1%}.")
+            st.caption(
+                "20거래일 안에 반복된 신호는 1회로 셉니다. "
+                "**N 이 작아(10~40회) 통계적 확신은 약합니다.** 3중 웅덩이는 사실상 RSI<30 하나와 "
+                "같은 정보이고(세 지표 모두 같은 가격에서 계산), 실제로 정보를 더하는 것은 "
+                "OBV·DI 확인 신호입니다. 원 규칙에는 손절 조건이 없습니다.")
+
+            with st.expander("신호 발생 이력 (최신순)"):
+                h = b["hist"].copy()
+                if h.empty:
+                    st.write("발생 이력 없음")
+                else:
+                    for c_ in ["r20", "r60", "r120", "mae20"]:
+                        h[c_] = h[c_] * 100
+                    h.index = h.index.strftime("%Y-%m-%d")
+                    st.dataframe(
+                        h.rename(columns={"r20": "20일 후", "r60": "60일 후",
+                                          "r120": "120일 후", "mae20": "20일 최대역행"}),
+                        width="stretch",
+                        column_config={c_: st.column_config.NumberColumn(c_, format="%.1f%%")
+                                       for c_ in ["20일 후", "60일 후", "120일 후", "20일 최대역행"]})
+
+            with st.expander("규칙 원문과 정량화 기준"):
+                st.markdown(
+                    "| 단계 | 원문 | 정량화 | 시간축 |\n|---|---|---|---|\n"
+                    "| ① 웅덩이 | Stoch·RSI(·CCI) 과매도 웅덩이 | 최근 3일 안 Slow %K(5,3,3)<20, "
+                    "RSI(14)<30, CCI(20)<−100 | 일봉 |\n"
+                    "| 입 최대 | ADX 데드 후 PDI·MDI 입 최대 | MDI−PDI 가 60일 최대 (최근 10일) | 일봉 |\n"
+                    "| ② OBV gold | OBV gold | 웅덩이 중 OBV 가 9일 SMA 상향 돌파 | 일봉 |\n"
+                    "| ③ DI gold | 입을 닫으며 gold | 입 최대 후 30거래일 안 PDI>MDI 교차 | 일봉 |\n"
+                    "| 매도 | Stoch 상단 웅덩이 + OBV 이격 | 주봉 Slow(10,5,5) 과매수 후 K<D "
+                    "+ OBV−신호선 축소 | 주봉 |\n\n"
+                    "재현 확인: 2025-04-04 웅덩이(OBV gold 없음) → 04-07 OBV gold, "
+                    "주봉 매도 2025-08-04 — 블로그의 1·2차 매수일, 매도 주와 일치 "
+                    "(`tests/test_blog_signals.py`).")
+                st.markdown(
+                    "**텔레그램 알림**: ①·②·③·매도 단계가 *새로* 켜질 때 한 번 전송합니다. "
+                    "미국 장중(30분 간격) 알림에는 `[잠정]` 이 붙고, 다음날 아침 확정 실행에서 "
+                    "조건이 유지되면 다시 울리지 않습니다.")

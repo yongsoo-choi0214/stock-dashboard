@@ -45,6 +45,7 @@ FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif'
 TICKER_SLOT = {
     "KRX.1001": 0, "KRX.2001": 1, "KRX.1028": 2,
     "YF.^GSPC": 0, "YF.^IXIC": 1, "YF.^VIX": 7, "YF.DX-Y.NYB": 3,
+    "YF.SOXL": 4, "YF.TQQQ": 5,
 }
 
 # pykrx get_market_trading_value_by_date 의 실제 컬럼명이다.

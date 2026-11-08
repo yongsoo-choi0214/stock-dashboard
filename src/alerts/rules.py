@@ -132,3 +132,33 @@ def data_staleness(meta: dict, max_lag_days: int = 5,
             out.append(Alert(f"etl:stale:{source}", "warn", f"데이터 지연 — {source}",
                              f"최신 관측 {md} ({lag}일 전)"))
     return out
+
+
+def blog_signals(ohlcv: pd.DataFrame, name: str, ticker: str, *,
+                 provisional: bool = False, recent: int = 3,
+                 url: str = "") -> list[Alert]:
+    """'현세의 주식' 블로그 규칙 단계(①②③·매도)가 최근 recent 거래일 안에 켜져 있으면 참.
+
+    key 에 단계를 넣어 단계별로 한 번씩 울린다. 장중 실행(provisional)에서도 key 는
+    같다 — 장중에 이미 울렸으면 아침 확정 실행에서 같은 조건으로 다시 울리지 않는다.
+    """
+    from src.research import blog_signals as bs
+
+    if len(ohlcv) < 150:
+        return []
+    now = bs.stage_now(ohlcv, recent=recent)
+    f = bs.features(ohlcv).iloc[-1]
+    tag = " (잠정·장중)" if provisional else ""
+    stats = (f"종가 {f.close:,.2f} · RSI {f.rsi:.1f} · Slow%K {f.sk:.1f} · "
+             f"MDI−PDI {f.spread:.1f}")
+    level = {"pit": "info", "obv_gold": "warn", "di_gold": "warn", "sell_w": "warn"}
+    out = []
+    for key, label, desc in bs.STAGES:
+        if not now["on"].get(key):
+            continue
+        body = f"{desc}\n{stats}\n기준 {now['asof']:%Y-%m-%d} 봉"
+        if url:
+            body += f"\n{url}"
+        out.append(Alert(f"blog:{ticker}:{key}", level[key],
+                         f"{name} {label}{tag}", body))
+    return out

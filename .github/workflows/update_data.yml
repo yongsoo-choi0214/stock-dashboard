@@ -70,7 +70,7 @@ jobs:
       - name: 스키마 회귀 검사
         # 깨진 데이터를 커밋하는 것이 안 하는 것보다 나쁘다.
         # 네트워크를 쓰지 않는 테스트만 골라 돌린다.
-        run: pytest tests/test_store.py tests/test_technical.py tests/test_liquidity.py tests/test_ecos.py -q
+        run: pytest tests/test_store.py tests/test_technical.py tests/test_liquidity.py tests/test_ecos.py tests/test_blog_signals.py -q
 
       - name: 알림 평가·전송
         # 토큰이 없으면 dry-run 으로 떨어진다 — 알림은 부가 기능이고

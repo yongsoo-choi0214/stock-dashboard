@@ -52,6 +52,7 @@ streamlit run app.py            # 대시보드
 | 4 | 대시보드 | ✅ 탭 5종, Streamlit Cloud 배포 |
 | 5 | 자동화 | ✅ 5/5 성공, 자율 커밋 확인 |
 | 6 | 연구 확장 | ✅ IC · 레짐 · 텔레그램 알림 |
+| 6+ | 레버리지 ETF 신호 | ✅ SOXL·TQQQ 블로그 규칙 탭 · 단계별 텔레그램 · 장중 30분 갱신 |
 
 테스트 115개 통과.
 
@@ -103,3 +104,20 @@ Secrets 는 **넣지 않는다.** 앱은 커밋된 parquet 만 읽으므로 API 
   같다(785행). 같은 API로 `T10Y2Y` 는 1997년치가 나오므로 인증 문제가 아니다.
 - **투자자예탁금은 ECOS `901Y056`(증시주변자금동향)에 있고 월간만 제공**된다.
   일간이 필요하면 KOFIA(freesis)를 붙여야 한다.
+
+## 레버리지 ETF 신호 탭 (SOXL · TQQQ)
+
+'현세의 주식' 블로그 글(2025-08-19)과 댓글(2026-11-04)의 보조지표 바닥 매수 규칙을 수치화했다.
+
+| 단계 | 조건 (일봉) |
+|---|---|
+| ① 3중 웅덩이 | 최근 3일 안 Slow %K(5,3,3)<20 · RSI(14)<30 · CCI(20)<−100 |
+| ② 웅덩이 + OBV gold | ① 중 OBV 가 9일 SMA 상향 돌파 (블로그 2차 매수) |
+| ③ 입 닫으며 DI gold | MDI−PDI 60일 최대 이후 30거래일 안 PDI>MDI 교차 |
+| 매도 | 주봉 Slow(10,5,5) 과매수 후 K<D + OBV 이격 축소 |
+
+- 코드: `src/research/blog_signals.py` (순수함수), `src/indicators/oscillators.py`
+- 검증: `tests/test_blog_signals.py` — 블로그 매수일(2025-04-04/07)·매도 주(2025-08-04) 재현
+- 대상 종목: `config/series.yaml` 의 `signals: true`
+- 알림: 단계가 새로 켜질 때 1회. `.github/workflows/intraday_signals.yml` 이 미국 정규장 중
+  30분마다 갱신하며 `(잠정·장중)` 표시, 확정은 아침 `update-data` 실행.

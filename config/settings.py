@@ -21,6 +21,9 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 load_dotenv(ROOT / ".env")
 FRED_API_KEY = os.getenv("FRED_API_KEY", "")
 ECOS_API_KEY = os.getenv("ECOS_API_KEY", "")
+# 알림 메시지에 붙일 대시보드 주소 (Streamlit Community Cloud)
+DASHBOARD_URL = os.getenv(
+    "DASHBOARD_URL", "https://stock-dashboard-kvz7ywctxakq89rqcztbd4.streamlit.app/")
 
 # --- 수집 공통 상수 ---
 DEFAULT_START = "2005-01-01"   # 히스토리 시작점
