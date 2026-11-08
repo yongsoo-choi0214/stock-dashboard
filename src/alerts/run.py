@@ -163,6 +163,12 @@ def send(text: str, token: str, chat_id: str) -> bool:
     return True
 
 
+def us_market_open(now: pd.Timestamp | None = None) -> bool:
+    """미국 정규장(뉴욕 평일 09:30–16:00) 여부. 공휴일은 고려하지 않는다."""
+    t = (now or pd.Timestamp.now(tz="UTC")).tz_convert("America/New_York")
+    return t.dayofweek < 5 and (9, 30) <= (t.hour, t.minute) < (16, 0)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="전송하지 않고 출력만")
@@ -190,7 +196,8 @@ def main() -> int:
         print("전송 성공" if ok else "전송 실패")
         return 0 if ok else 1
 
-    alerts = evaluate(intraday=a.intraday)
+    # 장중 표시는 실제 미국 정규장 시간에만 붙인다 — 수동 실행·장 마감 후 실행은 확정 봉이다
+    alerts = evaluate(intraday=a.intraday and us_market_open())
     active = {al.key for al in alerts}
     previous = read_state()
     fresh = [al for al in alerts if al.key not in previous]

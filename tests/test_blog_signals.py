@@ -132,3 +132,12 @@ def test_alert_quiet_in_uptrend(soxl):
     from src.alerts import rules
     al = rules.blog_signals(soxl.loc[:"2025-07-15"], "SOXL", "YF.SOXL")
     assert not [a for a in al if a.key.endswith((":pit", ":obv_gold"))]
+
+
+def test_us_market_open():
+    from src.alerts.run import us_market_open
+    ts = lambda s: pd.Timestamp(s, tz="America/New_York")
+    assert us_market_open(ts("2026-11-09 10:00"))          # 월요일 장중
+    assert not us_market_open(ts("2026-11-09 09:00"))      # 개장 전
+    assert not us_market_open(ts("2026-11-09 16:30"))      # 마감 후
+    assert not us_market_open(ts("2026-11-08 12:00"))      # 일요일
