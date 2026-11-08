@@ -31,14 +31,31 @@ st.set_page_config(page_title="Market Dashboard", layout="wide",
 
 
 # --------------------------------------------------------------- 데이터 로드
+def _stamp(path) -> float:
+    """파일 수정 시각. 캐시 키에 넣어 Actions 가 data/ 를 커밋하면 즉시 다시 읽게 한다.
+    ttl 만 쓰면 장중 30분 갱신이 화면에 최대 1시간 늦게 반영된다."""
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
 @st.cache_data(ttl=3600)
-def load(name: str) -> pd.DataFrame:
+def _load(name: str, stamp: float) -> pd.DataFrame:
     return store.read(name)
 
 
+def load(name: str) -> pd.DataFrame:
+    return _load(name, _stamp(settings.DATA_DIR / f"{name}.parquet"))
+
+
 @st.cache_data(ttl=3600)
-def load_meta() -> dict:
+def _load_meta(stamp: float) -> dict:
     return store.read_meta()
+
+
+def load_meta() -> dict:
+    return _load_meta(_stamp(settings.META_JSON))
 
 
 @st.cache_data(ttl=3600)
@@ -1131,8 +1148,12 @@ def ohlcv_of(prices: pd.DataFrame, ticker: str) -> pd.DataFrame:
     return d[["open", "high", "low", "close", "volume"]].astype("float64")
 
 
-@st.cache_data(ttl=1800)
 def blog_signal_bundle(ticker: str) -> dict:
+    return _blog_signal_bundle(ticker, _stamp(settings.DATA_DIR / "prices.parquet"))
+
+
+@st.cache_data(ttl=3600)
+def _blog_signal_bundle(ticker: str, stamp: float) -> dict:
     d = ohlcv_of(load("prices"), ticker)
     if len(d) < 150:
         return {}
