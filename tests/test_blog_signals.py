@@ -162,3 +162,107 @@ def test_compare_entries(soxl):
     assert len(r["table"]) == 3 and r["table"].index[0].startswith("저점 매수")
     assert {"N", "20일 중앙", "20일 승률"} <= set(r["table"].columns)
     assert list(r["pairs"].columns) == ["저점 매수일", "확인 매수일", "확인 매수가 더 비싼 정도"]
+
+
+# --- 4. AND·순서 의미 (합성 bool 입력으로 stage_flags 직접 검증) -------------------
+def _flags(n=80, **on):
+    """BASE_FLAGS 전부 False 인 프레임에 on={'col': [위치들]} 만 True 로."""
+    idx = pd.bdate_range("2024-01-01", periods=n)
+    f = pd.DataFrame(False, index=idx, columns=bs.BASE_FLAGS)
+    for col, pos in on.items():
+        f.iloc[pos, f.columns.get_loc(col)] = True
+    return f
+
+
+OS3 = dict(os_stoch=[40], os_rsi=[40], os_cci=[40])          # 40일째 과매도 3종
+
+
+def test_pit_needs_all_three():
+    assert bs.stage_flags(_flags(**OS3))["pit"].iloc[40]
+    for drop in OS3:                                          # 하나라도 빠지면 아님 (AND)
+        st = bs.stage_flags(_flags(**{k: v for k, v in OS3.items() if k != drop}))
+        assert not st["pit"].any()
+
+
+def test_pit_window_3_days():
+    st = bs.stage_flags(_flags(os_stoch=[38], os_rsi=[39], os_cci=[40]))
+    assert st["pit"].iloc[40]                                 # 3일 안에 흩어져도 인정
+    st = bs.stage_flags(_flags(os_stoch=[36], os_rsi=[39], os_cci=[40]))
+    assert not st["pit"].iloc[40]                             # 4일 전은 창 밖
+
+
+def test_mouth_requires_prior_adx_dead():
+    base = dict(**OS3, mouth_max=[40])
+    assert not bs.stage_flags(_flags(**base))["mouth"].any()                    # ADX 데드 없음
+    assert not bs.stage_flags(_flags(**base, adx_dead=[40]))["mouth"].iloc[40]  # 같은 날만 → 아님
+    assert bs.stage_flags(_flags(**base, adx_dead=[33]))["mouth"].iloc[40]      # 7일 전 → 인정
+    assert bs.stage_flags(_flags(**base, adx_dead=[25]))["mouth"].iloc[40]      # 15일 전 → 경계 안
+    assert not bs.stage_flags(_flags(**base, adx_dead=[24]))["mouth"].iloc[40]  # 16일 전 → 창 밖
+    assert not bs.stage_flags(_flags(mouth_max=[40], adx_dead=[33]))["mouth"].any()  # 과매도 없음
+
+
+def test_obv_gold_requires_pit():
+    assert bs.stage_flags(_flags(**OS3, obv_cross=[41]))["obv_gold"].iloc[41]
+    assert not bs.stage_flags(_flags(obv_cross=[41]))["obv_gold"].any()
+
+
+def test_di_gold_requires_dmi_setup_within_window():
+    setup = dict(**OS3, mouth_max=[40], adx_dead=[33])        # 40일째 2단계(DMI)
+    st = bs.stage_flags(_flags(**setup))
+    # 과매도·입 최대는 3일 창이라 2단계가 40~42일 켜져 있다 → 30일은 마지막 날(42)부터 센다
+    assert st["mouth"][st["mouth"]].index.tolist() == list(st.index[40:43])
+    assert bs.stage_flags(_flags(**setup, di_cross=[60]))["di_gold"].iloc[60]       # 18일 뒤
+    assert bs.stage_flags(_flags(**setup, di_cross=[72]))["di_gold"].iloc[72]       # 30일 뒤(경계)
+    assert not bs.stage_flags(_flags(**setup, di_cross=[73]))["di_gold"].any()      # 31일 뒤
+    assert not bs.stage_flags(_flags(di_cross=[60]))["di_gold"].any()               # 셋업 없음
+    # OBV 2단계만 있으면 기본(di_setup="mouth")에선 3단계 아님, 변형에선 인정
+    obv_only = dict(**OS3, obv_cross=[41], di_cross=[55])
+    assert not bs.stage_flags(_flags(**obv_only))["di_gold"].any()
+    p = bs.Params(di_setup="mouth_or_obv")
+    assert bs.stage_flags(_flags(**obv_only), p)["di_gold"].iloc[55]
+
+
+# --- 5. 미래 데이터 미사용 (look-ahead) -------------------------------------------
+def test_no_lookahead_daily_signals(soxl):
+    """t 까지만 준 데이터로 계산한 t 의 신호 == 전체 데이터로 계산한 t 의 신호."""
+    full = bs.signals(soxl)
+    days = soxl.loc["2024-09-01":].index[::5]
+    for t in days:
+        part = bs.signals(soxl.loc[:t]).loc[t]
+        assert part.equals(full.loc[t]), (t, part.to_dict(), full.loc[t].to_dict())
+
+
+# --- 6. 알림 중복 방지 (일별 시뮬레이션) -----------------------------------------
+def test_alert_fires_once_per_episode(soxl):
+    """2025-03~06 를 하루씩 진행하며 run.py 와 같은 '새 key 만 전송' 규칙을 적용."""
+    from src.alerts import rules
+    prev, fired = set(), {}
+    for t in soxl.loc["2025-03-17":"2025-06-30"].index:
+        active = {a.key for a in rules.blog_signals(soxl.loc[:t], "SOXL", "YF.SOXL")}
+        for k in active - prev:
+            fired.setdefault(k.split(":")[-1], []).append(t)
+        prev = active
+    first = {k: v[0] for k, v in fired.items()}
+    assert first["pit"] == pd.Timestamp("2025-04-03")
+    assert first["mouth"] == pd.Timestamp("2025-04-03")
+    assert first["obv_gold"] == pd.Timestamp("2025-04-07")
+    assert first["di_gold"] == pd.Timestamp("2025-05-08")
+    for k, v in fired.items():                                # 같은 국면에 반복 전송 없음
+        assert len(v) == 1, (k, v)
+
+
+# --- 7. 기준값 근처에서 블로그 매매 재현이 유지되는가 ------------------------------
+@pytest.mark.parametrize("adx_win,close_win", [(10, 25), (10, 45), (15, 30), (20, 25), (20, 45)])
+def test_blog_reproduction_robust(soxl, adx_win, close_win):
+    p = bs.Params(adx_prior_win=adx_win, close_win=close_win)
+    s = bs.signals(soxl, p)
+    assert s.loc["2025-04-04", "mouth"] and s.loc["2025-04-07", "obv_gold"]
+    di = s.loc["2025-04-10":"2025-06-30", "di_gold"]
+    assert di[di].index[0] == pd.Timestamp("2025-05-08")
+
+
+def test_default_params_pinned():
+    """검증 문서와 화면 설명이 이 값들을 전제로 한다 — 바꾸면 문서·화면도 같이 고칠 것."""
+    p = bs.Params()
+    assert (p.adx_prior_win, p.close_win, p.di_setup, p.adx_dead_mode, p.pit_win) == \
+        (15, 30, "mouth", "sig", 3)

@@ -139,3 +139,23 @@ def test_leverage_page(has_data):
 def test_market_page_has_no_leverage_tab(has_data):
     at = _run()
     assert "레버리지 ETF 신호" not in [t.label for t in at.tabs]
+
+
+def test_no_tilde_strikethrough_risk():
+    """마크다운에서 '~' 두 개가 한 문단에 있으면 그 사이가 취소선이 된다 (신호 페이지에서 실제로 났다).
+    - 신호 페이지(views/leverage.py): '~' 를 아예 쓰지 않는다 (범위는 '–' 나 '에서')
+    - 모든 페이지: 문자열 하나(이어 붙인 리터럴·f-string 포함)에 '~' 가 두 개 이상이면 안 된다"""
+    import ast, pathlib
+    for path in pathlib.Path("views").glob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                text = node.value
+            elif isinstance(node, ast.JoinedStr):
+                text = "".join(v.value for v in node.values
+                               if isinstance(v, ast.Constant) and isinstance(v.value, str))
+            else:
+                continue
+            if path.name == "leverage.py":
+                assert "~" not in text, f"{path}:{node.lineno} 에 '~'"
+            assert text.count("~") < 2, f"{path}:{node.lineno} 에 '~' 두 개 — 취소선"

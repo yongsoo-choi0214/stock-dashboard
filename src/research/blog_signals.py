@@ -53,6 +53,8 @@ class Params:
     spread_recent: int = 10
     close_win: int = 30
     adx_prior_win: int = 15          # 'ADX 가 데드난 후' — 입 최대 직전 몇 거래일 안에 데드가 있었나
+    adx_dead_mode: str = "sig"       # "sig": ADX < 자기 9일 평균 / "turn": ADX 가 전일보다 하락
+    di_setup: str = "mouth"          # 3단계 셋업: "mouth"(2단계 DMI) / "mouth_or_obv"(2단계 둘 중 하나)
     weekly_stoch: tuple[int, int, int] = (10, 5, 5)
 
 
@@ -129,34 +131,55 @@ def features(df: pd.DataFrame, p: Params = Params()) -> pd.DataFrame:
     f["obv_sig"] = f["obv"].rolling(p.obv_sig).mean()
     f["spread"] = f["mdi"] - f["pdi"]
 
-    w = p.pit_win
     f["os_stoch"] = f["sk"] < p.os_stoch
     f["os_rsi"] = f["rsi"] < p.os_rsi
     f["os_cci"] = f["cci"] < p.os_cci
-    f["pit"] = (_recent(f["os_stoch"], w) & _recent(f["os_rsi"], w)
-                & _recent(f["os_cci"], w))
-
     f["obv_cross"] = osc.cross_up(f["obv"], f["obv_sig"])
     f["obv_above"] = f["obv"] > f["obv_sig"]
-    f["obv_gold"] = f["pit"] & _recent(f["obv_cross"], w)
-
     smax = f["spread"].rolling(p.spread_win).max()
     f["mouth_max"] = (f["spread"] >= smax - 1e-9) & (f["spread"] > 0)
     f["mouth_recent"] = _recent(f["mouth_max"], p.spread_recent)
-    f["adx_dead"] = f["adx"] < f["adx_sig"]
-    # '데드난 후': 오늘이 아니라 직전 adx_prior_win 거래일 안에 데드였던 날이 있어야 한다
-    f["adx_dead_prior"] = _recent(f["adx_dead"].shift(1, fill_value=False), p.adx_prior_win)
-    f["mouth"] = f["pit"] & _recent(f["mouth_max"], w) & f["adx_dead_prior"]
-
+    f["adx_dead"] = ((f["adx"] < f["adx_sig"]) if p.adx_dead_mode == "sig"
+                     else (f["adx"] < f["adx"].shift()))
+    f["di_cross"] = osc.cross_up(f["pdi"], f["mdi"])
     pos = np.arange(len(f), dtype=float)
     last = pd.Series(np.where(f["mouth_max"], pos, np.nan), index=f.index).ffill()
     f["days_since_mouth"] = pos - last
-    last_setup = pd.Series(np.where(f["mouth"], pos, np.nan), index=f.index).ffill()
-    f["days_since_setup"] = pos - last_setup
-    f["di_cross"] = osc.cross_up(f["pdi"], f["mdi"])
-    # 3단계는 독립 조건이 아니다 — '입을 벌리다가 닫으러 가면서' 는 2단계(DMI) 의 그 입이다
-    f["di_gold"] = f["di_cross"] & (f["days_since_setup"] <= p.close_win)
+
+    st_ = stage_flags(f, p)
+    for col in st_.columns:
+        f[col] = st_[col]
     return f
+
+
+#: stage_flags 가 읽는 기초 조건 컬럼(모두 bool)
+BASE_FLAGS = ["os_stoch", "os_rsi", "os_cci", "obv_cross", "mouth_max", "adx_dead", "di_cross"]
+
+
+def stage_flags(f: pd.DataFrame, p: Params = Params()) -> pd.DataFrame:
+    """기초 조건(bool 컬럼, BASE_FLAGS) → 단계 판정. 원문의 AND·순서 구조를 여기서만 정의한다.
+
+    - pit      : 과매도 3종이 최근 pit_win 일 안에 모두
+    - obv_gold : pit AND 최근 pit_win 일 안 OBV 골든크로스              (본문 2차 매수)
+    - mouth    : pit AND 최근 pit_win 일 안 입 최대 AND 직전 adx_prior_win 일 안 ADX 데드
+                 — '데드난 후' 이므로 오늘의 데드는 세지 않는다            (댓글 매수타이밍)
+    - di_gold  : DI 골든크로스 AND 셋업(기본 mouth)이 마지막으로 켜져 있던 날부터
+                 close_win 거래일 이내                                      (댓글 '더 확실히')
+    """
+    w = p.pit_win
+    b = {k: f[k].fillna(False).astype(bool) for k in BASE_FLAGS}
+    out = pd.DataFrame(index=f.index)
+    out["pit"] = _recent(b["os_stoch"], w) & _recent(b["os_rsi"], w) & _recent(b["os_cci"], w)
+    out["obv_gold"] = out["pit"] & _recent(b["obv_cross"], w)
+    out["adx_dead_prior"] = _recent(b["adx_dead"].shift(1, fill_value=False), p.adx_prior_win)
+    out["mouth"] = out["pit"] & _recent(b["mouth_max"], w) & out["adx_dead_prior"]
+    setup = out["mouth"] if p.di_setup == "mouth" else (out["mouth"] | out["obv_gold"])
+    pos = np.arange(len(f), dtype=float)
+    last_setup = pd.Series(np.where(setup, pos, np.nan), index=f.index).ffill()
+    out["days_since_setup"] = pos - last_setup
+    # 3단계는 독립 조건이 아니다 — '입을 벌리다가 닫으러 가면서' 는 2단계(DMI) 의 그 입이다
+    out["di_gold"] = b["di_cross"] & (out["days_since_setup"] <= p.close_win)
+    return out
 
 
 def weekly(df: pd.DataFrame, p: Params = Params()) -> pd.DataFrame:
