@@ -50,11 +50,11 @@ class Params:
 
 #: 신호 단계 — (컬럼, 라벨, 설명). 대시보드·알림이 같은 정의를 쓴다.
 STAGES: list[tuple[str, str, str]] = [
-    ("pit", "1단계 웅덩이",
+    ("pit", "1단계 과매도",
      "Stoch·CCI·RSI 동시 과매도. 블로그 1차 매수. 단독으로는 '떨어지는 칼'일 수 있음"),
-    ("obv_gold", "2단계 OBV gold",
+    ("obv_gold", "2단계 OBV 골든크로스",
      "과매도 중 거래량이 돌아섬. 블로그 2차(본격) 매수"),
-    ("di_gold", "3단계 DI gold",
+    ("di_gold", "3단계 DI 골든크로스",
      "MDI−PDI 입 최대 이후 PDI가 MDI를 상향 돌파. 댓글의 '더 확실한' 매수"),
     ("sell_w", "매도 신호",
      "주봉 Stoch 과매수 후 꺾임 + OBV 이격 축소. 블로그 매도 규칙"),
@@ -192,14 +192,14 @@ def checklist(df: pd.DataFrame, p: Params = Params()) -> list[dict]:
          f"RSI {r.rsi:.1f} (<{p.os_rsi:.0f})"),
         ("CCI 과매도", bool(_recent(f["os_cci"], p.pit_win).iloc[-1]),
          f"CCI {r.cci:.0f} (<{p.os_cci:.0f})"),
-        ("DMI 입 최대", bool(r.mouth_recent),
+        ("DMI 입 최대 (MDI−PDI)", bool(r.mouth_recent),
          f"MDI−PDI {r.spread:.1f} (60일 최대 {f['spread'].tail(p.spread_win).max():.1f})"),
-        ("ADX 꺾임(데드)", bool(r.adx_dead),
+        ("ADX 꺾임 (참고)", bool(r.adx_dead),
          f"ADX {r.adx:.1f} vs 신호선 {r.adx_sig:.1f}"),
-        ("OBV gold", bool(_recent(f["obv_cross"], p.pit_win).iloc[-1]),
+        ("OBV 골든크로스", bool(_recent(f["obv_cross"], p.pit_win).iloc[-1]),
          ("최근 3일 안 신호선 상향 돌파" if bool(_recent(f["obv_cross"], p.pit_win).iloc[-1])
           else "교차 없음") + f" · 현재 신호선 {'위' if r.obv_above else '아래'}"),
-        ("DI gold (PDI>MDI)", bool(r.di_gold) or bool(r.pdi > r.mdi),
+        ("DI 골든크로스 (PDI>MDI)", bool(r.di_gold) or bool(r.pdi > r.mdi),
          f"PDI {r.pdi:.1f} / MDI {r.mdi:.1f}"),
         ("주봉 Stoch 과매도", bool(w.sk < p.os_stoch),
          f"주봉 %K {w.sk:.1f}, RSI {w.rsi:.1f}" + (" · 진행 중 주" if w.partial else "")),
