@@ -440,6 +440,7 @@ SIGNAL_STYLE = {
     "mouth": (2, "triangle-up", "저점 매수 · DMI (2단계)", "저점매수"),
     "obv_gold": (2, "diamond", "저점 매수 · OBV (2단계)", "저점매수"),
     "di_gold": (2, "triangle-up-open", "확인 매수 (3단계)", "확인매수"),
+    "di_gold_obv": (2, "diamond-open", "확인 매수 · 참고 (3단계 OBV 경로)", "확인(참고)"),
     "sell_w": (7, "triangle-down", "매도 신호", "매도"),
 }
 
@@ -531,15 +532,19 @@ def blog_signal_panel(f: pd.DataFrame, sig: pd.DataFrame, title: str, *,
     return fig
 
 
-def blog_signal_legend_html(mode: str = "light") -> str:
-    """blog_signal_panel 의 범례. 폭에 맞춰 줄바꿈되는 HTML 한 덩어리."""
+def blog_signal_legend_html(mode: str = "light", keys=None) -> str:
+    """blog_signal_panel 의 범례. 폭에 맞춰 줄바꿈되는 HTML 한 덩어리.
+
+    keys: 보여줄 신호 키(차트에 그리는 sig 컬럼). None 이면 참고 신호를 뺀 기본 단계.
+    """
     p = theme.palette(mode)
     pos, neg = _diverging(mode)
     glyph = {"circle": "●", "triangle-up": "▲", "triangle-up-open": "△", "diamond": "◆",
-             "triangle-down": "▼"}
+             "diamond-open": "◇", "triangle-down": "▼"}
+    keys = [k for k in SIGNAL_STYLE if k != "di_gold_obv"] if keys is None else list(keys)
     items = [f"<span style='color:{p['series'][0]}'>━</span> 종가"]
     items += [f"<span style='color:{p['series'][slot]}'>{glyph[sym]}</span> {label}"
-              for slot, sym, label, _ in SIGNAL_STYLE.values()]
+              for k, (slot, sym, label, _) in SIGNAL_STYLE.items() if k in keys]
     items += [f"<span style='color:{p['series'][5]}'>━</span> RSI(14)",
               f"<span style='color:{p['series'][3]}'>━</span> Slow %K",
               f"<span style='color:{p['series'][6]}'>━</span> MDI−PDI",

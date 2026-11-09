@@ -136,25 +136,26 @@ def data_staleness(meta: dict, max_lag_days: int = 5,
 
 def blog_signals(ohlcv: pd.DataFrame, name: str, ticker: str, *,
                  provisional: bool = False, recent: int = 3,
-                 url: str = "") -> list[Alert]:
+                 url: str = "", ref=()) -> list[Alert]:
     """'현세의 주식' 블로그 규칙 단계(①②③·매도)가 최근 recent 거래일 안에 켜져 있으면 참.
 
     key 에 단계를 넣어 단계별로 한 번씩 울린다. 장중 실행(provisional)에서도 key 는
     같다 — 장중에 이미 울렸으면 아침 확정 실행에서 같은 조건으로 다시 울리지 않는다.
+    ref: 이 종목에 켠 참고 신호 키(series.yaml ref_signals). 제목에 '(참고)' 가 붙는다.
     """
     from src.research import blog_signals as bs
 
     if len(ohlcv) < 150:
         return []
-    now = bs.stage_now(ohlcv, recent=recent)
+    now = bs.stage_now(ohlcv, recent=recent, ref=ref)
     f = bs.features(ohlcv).iloc[-1]
     tag = " (잠정·장중)" if provisional else ""
     stats = (f"종가 {f.close:,.2f} · RSI {f.rsi:.1f} · Slow%K {f.sk:.1f} · "
-             f"MDI−PDI {f.spread:.1f}")
+             f"MDI−PDI {f.spread:.1f} · PDI {f.pdi:.1f} / MDI {f.mdi:.1f}")
     level = {"pit": "info", "mouth": "warn", "obv_gold": "warn", "di_gold": "warn",
-             "sell_w": "warn"}
+             "di_gold_obv": "warn", "sell_w": "warn"}
     out = []
-    for key, label, desc in bs.STAGES:
+    for key, label, desc in bs.STAGES + bs.REF_STAGES:
         if not now["on"].get(key):
             continue
         body = f"{desc}\n{stats}\n기준 {now['asof']:%Y-%m-%d} 봉"

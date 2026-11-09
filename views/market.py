@@ -200,7 +200,8 @@ def _signal_line(stamp: float) -> str:
         d = ohlcv_of(load("prices"), f"YF.{i['ticker']}")
         if len(d) < 150:
             continue
-        parts.append(f"{i['ticker']} {bsig.SIGNAL[bsig.stage_now(d)['level']][0]}")
+        level = bsig.stage_now(d, ref=i.get("ref_signals") or ())["level"]
+        parts.append(f"{i['ticker']} {bsig.SIGNAL[level][0]}")
     return " · ".join(parts)
 
 

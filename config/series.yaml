@@ -300,12 +300,16 @@ yfinance:
   # --- 레버리지 ETF: 블로그 매매 규칙 신호 대상 (signals: true) ---
   #     src/research/blog_signals.py · 탭 "레버리지 ETF 신호" · 텔레그램 알림이
   #     signals: true 인 티커만 본다. 종목을 늘리려면 여기에 한 줄 추가하면 된다.
+  #     ref_signals: 검증에서 채택하지 않은 참고 신호를 이 종목에만 켠다 (blog_signals.REF_STAGES).
+  #       di_gold_obv = 2단계(OBV) 뒤 DI 골든크로스. 2011년 이후 TQQQ 3회(60일 +8%, +6%, +48%),
+  #       SOXL 2회(−40%, +15%) — SOXL 은 끈다.
   - ticker: "SOXL"
     name: SOXL (반도체 3배)
     signals: true
   - ticker: "TQQQ"
     name: TQQQ (나스닥100 3배)
     signals: true
+    ref_signals: [di_gold_obv]
 
 
 # 코스피 규모별·업종별 지수 — 시장 폭(breadth) 계산용.

@@ -22,6 +22,8 @@ STAGE = {
     "mouth": ("2단계", "green", "과매도 + 직전 ADX 데드 + DMI 입 최대 · 하락 압력이 극단까지 옴"),
     "obv_gold": ("2단계", "green", "과매도 + OBV 골든크로스 · 매수 거래량이 돌아섬"),
     "di_gold": ("3단계", "blue", "2단계(DMI) 뒤 DI 골든크로스 · 하락에서 상승 추세로 전환 확인"),
+    "di_gold_obv": ("3단계·참고", "blue",
+                    "2단계(OBV) 뒤 DI 골든크로스 · 2단계(DMI) 없이 반등한 국면의 참고 신호"),
     "sell_w": ("매도", "red", "주봉 Stochastic 과열 후 꺾임 + OBV 둔화"),
 }
 STEPS = [("pit", "1 과매도"), ("mouth", "2 DMI 입 최대"), ("obv_gold", "2 OBV 골든"),
@@ -40,6 +42,8 @@ CONDITIONS = (
     "— 본문의 2차 매수 | 일봉 |\n"
     "| 3 | 확인 매수 | **2단계(DMI) 뒤 30거래일 안**에 **PDI 가 MDI 를 상향 돌파**(DI 골든크로스) "
     "— 댓글의 '더 확실히' | 일봉 |\n"
+    "| 3 (참고) | 확인 매수(참고) | **TQQQ 만**. 2단계(DMI) 없이 **2단계(OBV) 뒤 30거래일 안** "
+    "DI 골든크로스. 2011년 이후 3회뿐이라 검증된 신호가 아닌 참고용 | 일봉 |\n"
     "| 매도 | 매도 신호 | **주봉 Stochastic %K 80 초과** 후 %D 아래로 꺾임 그리고 "
     "**OBV 와 평균선 간격 축소** | 주봉 |"
 )
@@ -60,23 +64,25 @@ GLOSSARY = """
 
 
 @st.cache_data(ttl=3600)
-def _bundle(ticker: str, stamp: float) -> dict:
+def _bundle(ticker: str, stamp: float, ref: tuple[str, ...] = ()) -> dict:
     d = ohlcv_of(load("prices"), ticker)
     if len(d) < 150:
         return {}
-    return {"d": d, "f": bsig.features(d), "sig": bsig.signals(d),
-            "check": bsig.checklist(d), "now": bsig.stage_now(d),
+    return {"d": d, "f": bsig.features(d), "sig": bsig.signals(d, ref=ref),
+            "check": bsig.checklist(d), "now": bsig.stage_now(d, ref=ref),
             "study": bsig.event_study(d), "hist": bsig.history(d),
-            "events": bsig.recent_events(d), "cmp": bsig.compare_entries(d)}
+            "events": bsig.recent_events(d, ref=ref), "cmp": bsig.compare_entries(d)}
 
 
-def bundle(ticker: str) -> dict:
-    return _bundle(ticker, data_stamp())
+def bundle(ticker: str, ref: tuple[str, ...] = ()) -> dict:
+    return _bundle(ticker, data_stamp(), ref)
 
 
 def steps_md(on: dict) -> str:
     """단계 진행 배지. 최근 3거래일 안에 켜진 단계만 색을 입힌다."""
     parts = [f":{'green' if on.get(k) else 'gray'}-badge[{lab}]" for k, lab in STEPS]
+    if on.get("di_gold_obv") and not on.get("di_gold"):    # 참고 경로로 켜진 3단계
+        parts[3] = ":blue-badge[3 DI 골든 · 참고]"
     # 2단계 두 갈래는 '/' 로 묶어 보여준다
     parts = [parts[0], parts[1] + " / " + parts[2], parts[3]]
     if on.get("sell_w"):
@@ -87,8 +93,9 @@ def steps_md(on: dict) -> str:
 # --------------------------------------------------------------- 헤더
 names = ticker_names()
 prices = load("prices")
-tickers = [f"YF.{i['ticker']}" for i in settings.series_for("yfinance") if i.get("signals")]
-tickers = [t for t in tickers if (prices["ticker"] == t).any()]
+items_ = [i for i in settings.series_for("yfinance") if i.get("signals")]
+refs = {f"YF.{i['ticker']}": tuple(i.get("ref_signals") or ()) for i in items_}
+tickers = [t for t in refs if (prices["ticker"] == t).any()]
 
 st.title("레버리지 ETF 신호")
 st.caption("'현세의 주식' 블로그의 보조지표 바닥 매수 규칙을 수치로 옮긴 화면입니다. "
@@ -99,7 +106,7 @@ if not tickers:
     st.info("SOXL/TQQQ 데이터가 아직 없습니다. 다음 자동 수집(us_equity) 후 나타납니다.")
     st.stop()
 
-bundles = {t: bundle(t) for t in tickers}
+bundles = {t: bundle(t, refs[t]) for t in tickers}
 tickers = [t for t in tickers if bundles[t]]
 
 # --------------------------------------------------------------- 한눈 요약
@@ -179,7 +186,7 @@ else:
     days = {"6개월": 182, "1년": 365, "3년": 365 * 3}[span]
     view = f.loc[f.index >= f.index[-1] - pd.Timedelta(days=days)]
 st.markdown(f"**{names.get(tk, tk)} 신호 차트**")
-st.markdown(charts.blog_signal_legend_html(mode()), unsafe_allow_html=True)
+st.markdown(charts.blog_signal_legend_html(mode(), keys=list(sig.columns)), unsafe_allow_html=True)
 st.plotly_chart(charts.blog_signal_panel(view, sig.loc[view.index],
                                          f"{names.get(tk, tk)} 신호 패널", mode=mode()),
                 width="stretch")
@@ -262,6 +269,8 @@ with st.expander("블로그 원문과의 대응 · 알림"):
         "| 2 (DMI) | 스토·CCI·RSI 웅덩이 파이고 ADX 데드난 후 PDI·MDI 입 최대 | "
         "세 지표 과매도 + 직전 15일 안 ADX 데드 + MDI−PDI 60일 최대 |\n"
         "| 3 | 입을 벌리다가 닫으러 가면서 gold | 2단계(DMI) 뒤 30일 안 PDI>MDI 교차 |\n"
+        "| 3 (참고) | (원문에 없음) | TQQQ 만: 2단계(OBV) 뒤 30일 안 PDI>MDI 교차. "
+        "입 최대가 ADX 데드보다 먼저 와서 2단계(DMI)가 없는 국면을 위한 참고 신호 |\n"
         "| 매도 | Stoch 상단 웅덩이 + OBV 이격 | 주봉 기준. 블로그 매도일(2025-08) 1건에 맞춘 해석이라 "
         "표본 외 검증에서 예측력이 없었음 |")
     st.caption(

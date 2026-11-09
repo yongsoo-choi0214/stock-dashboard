@@ -222,6 +222,62 @@ def test_di_gold_requires_dmi_setup_within_window():
     assert bs.stage_flags(_flags(**obv_only), p)["di_gold"].iloc[55]
 
 
+def test_di_gold_obv_reference_path():
+    """참고 신호: 2단계(OBV) 뒤 30거래일 안 DI 골든크로스, 단 정식 3단계(DMI 경로)와 겹치지 않음."""
+    obv = dict(**OS3, obv_cross=[41])                         # obv_gold 41~42일(과매도 창 끝 42)
+    st = bs.stage_flags(_flags(**obv))
+    assert st["obv_gold"][st["obv_gold"]].index.tolist() == list(st.index[41:43])
+    assert bs.stage_flags(_flags(**obv, di_cross=[55]))["di_gold_obv"].iloc[55]
+    assert bs.stage_flags(_flags(**obv, di_cross=[72]))["di_gold_obv"].iloc[72]    # 마지막 날+30
+    assert not bs.stage_flags(_flags(**obv, di_cross=[73]))["di_gold_obv"].any()   # 창 밖
+    assert not bs.stage_flags(_flags(di_cross=[55]))["di_gold_obv"].any()          # 셋업 없음
+    # DMI 셋업도 있으면 정식 3단계가 되고 참고 신호는 꺼진다 (같은 날 두 번 알리지 않음)
+    both = bs.stage_flags(_flags(**obv, mouth_max=[40], adx_dead=[33], di_cross=[55]))
+    assert both["di_gold"].iloc[55] and not both["di_gold_obv"].any()
+
+
+def test_reference_signal_is_opt_in(soxl):
+    """ref 를 요청하지 않으면 기존 신호 표·알림이 그대로다."""
+    from src.alerts import rules
+    base = bs.signals(soxl)
+    with_ref = bs.signals(soxl, ref=["di_gold_obv"])
+    assert list(base.columns) == [k for k, *_ in bs.STAGES]
+    assert list(with_ref.columns) == list(base.columns) + ["di_gold_obv"]
+    assert with_ref[base.columns].equals(base)
+    al = rules.blog_signals(soxl, "SOXL", "YF.SOXL")
+    assert not [a for a in al if a.key.endswith(":di_gold_obv")]
+    assert bs.SIGNAL["di_gold_obv"][0] == "확인 매수(참고)" and "참고" in bs.LABEL["di_gold_obv"]
+
+
+def test_reference_quiet_when_dmi_path(soxl):
+    """2025-04 는 정식 3단계(DMI 경로) 국면 — ref 를 켜도 참고 신호가 따로 나면 안 된다."""
+    from src.alerts import rules
+    full = bs.signals(soxl, ref=["di_gold_obv"]).loc["2025-04-01":"2025-06-30"]
+    assert full["di_gold"].any() and not full["di_gold_obv"].any()
+    keys = {a.key for a in rules.blog_signals(soxl.loc[:"2025-04-07"], "T", "YF.T",
+                                              ref=["di_gold_obv"])}
+    assert "blog:YF.T:obv_gold" in keys and "blog:YF.T:di_gold_obv" not in keys
+
+
+def test_reference_alert_wiring(soxl, monkeypatch):
+    """참고 신호가 켜지면 알림 key·제목·레벨이 정해진 형태로 나간다."""
+    from src.alerts import rules
+    real = bs.stage_now
+
+    def fake(df, p=bs.Params(), recent=3, ref=()):
+        out = real(df, p, recent, ref)
+        out["on"]["di_gold_obv"] = "di_gold_obv" in ref
+        return out
+
+    monkeypatch.setattr(bs, "stage_now", fake)
+    al = {a.key: a for a in rules.blog_signals(soxl, "TQQQ", "YF.TQQQ", ref=["di_gold_obv"])}
+    a = al["blog:YF.TQQQ:di_gold_obv"]
+    assert a.level == "warn" and "확인 매수(참고)" in a.title and "참고" in a.body
+    assert not any(ch in a.body for ch in "_*[`")
+    assert "blog:YF.TQQQ:di_gold_obv" not in {
+        x.key for x in rules.blog_signals(soxl, "SOXL", "YF.SOXL")}
+
+
 # --- 5. 미래 데이터 미사용 (look-ahead) -------------------------------------------
 def test_no_lookahead_daily_signals(soxl):
     """t 까지만 준 데이터로 계산한 t 의 신호 == 전체 데이터로 계산한 t 의 신호."""

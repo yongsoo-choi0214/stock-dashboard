@@ -99,7 +99,8 @@ def _blog_signal_alerts(prices: pd.DataFrame, intraday: bool) -> list[Alert]:
         try:
             out += rules.blog_signals(
                 d[["open", "high", "low", "close", "volume"]].astype("float64"),
-                item["name"], tk, provisional=intraday, url=settings.DASHBOARD_URL)
+                item["name"], tk, provisional=intraday, url=settings.DASHBOARD_URL,
+                ref=item.get("ref_signals") or ())
         except Exception as e:          # 한 종목의 실패가 전체 알림을 죽이지 않는다
             print(f"  [{tk}] 신호 계산 실패: {type(e).__name__}: {e}")
     return out

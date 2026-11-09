@@ -15,6 +15,9 @@
 - 2  DMI      : 1 + 직전 15거래일 안 ADX 데드(ADX<9일 평균) + MDI−PDI 60일 최대(최근 3일) — 댓글 '매수타이밍'
 - 2' OBV      : 1 + OBV 가 9일 SMA 상향 돌파(최근 3일) — 본문 2차 매수
 - 3  DI 골든  : 2(DMI) 이후 30거래일 안에 PDI 가 MDI 상향 돌파 — 댓글 '더 확실히'
+- 3' 참고     : 2(OBV) 이후 30거래일 안 DI 골든인데 3 이 아닌 경우 — 2(DMI) 없이 반등한 국면.
+                검증에서 채택한 3단계는 DMI 경로뿐이라 '참고' 신호로만 둔다. 종목별로 켠다
+                (series.yaml 의 ref_signals). 계산은 항상 하되 signals/stage_now 는 ref 로 요청할 때만 낸다.
 - 매도        : 주봉 Slow(10,5,5) 과매수(>80) 후 K<D, 그리고 OBV−signal 이격 축소
 
 2025-04 확인: ADX 데드 3/24~28 → 과매도·입 최대 4/3~4 (블로그 1차 매수 4/4) → OBV 골든 4/7(2차)
@@ -71,7 +74,14 @@ STAGES: list[tuple[str, str, str]] = [
     ("sell_w", "매도 신호",
      "주봉 Stoch 과매수 후 꺾임 + OBV 이격 축소. 블로그 매도 규칙"),
 ]
-LABEL = {k: lab for k, lab, _ in STAGES}
+#: 참고 신호 — 기본 단계에 넣지 않고 종목별로 켠다(series.yaml ref_signals). 성과 통계·비교표에는 안 들어간다.
+REF_STAGES: list[tuple[str, str, str]] = [
+    ("di_gold_obv", "3단계 DI 골든크로스 (OBV 경로·참고)",
+     "2단계(OBV) 뒤 30거래일 안 PDI가 MDI를 상향 돌파. 2단계(DMI) 없이 반등한 국면이라 "
+     "검증에서 채택한 3단계는 아님 — 참고용"),
+]
+REF_KEYS = [k for k, *_ in REF_STAGES]
+LABEL = {k: lab for k, lab, _ in STAGES + REF_STAGES}
 
 #: 단계 → 사람이 읽는 신호 이름과 색. 사이트·텔레그램이 같은 말을 쓴다.
 SIGNAL: dict[str | None, tuple[str, str]] = {
@@ -83,21 +93,28 @@ SIGNAL: dict[str | None, tuple[str, str]] = {
     "mouth": ("저점 매수", "green"),
     "obv_gold": ("저점 매수", "green"),
     "di_gold": ("확인 매수", "blue"),
+    "di_gold_obv": ("확인 매수(참고)", "blue"),
     "sell_w": ("매도 신호", "red"),
 }
 
 
+def _ref(ref) -> list[str]:
+    """요청된 참고 신호 키만, REF_KEYS 순서로."""
+    ref = set(ref or ())
+    return [k for k in REF_KEYS if k in ref]
+
+
 def recent_events(df: pd.DataFrame, p: Params = Params(), days: int = 365,
-                  cooldown: int = 20) -> pd.DataFrame:
+                  cooldown: int = 20, ref=()) -> pd.DataFrame:
     """최근 days 일 신호 이벤트(에피소드 첫날) + 신호 이후 현재까지 수익률. 최신순.
 
     텔레그램 알림과 같은 단계 정의를 쓴다(알림은 '새로 켜질 때' 기준이라 날짜가 하루 이틀 다를 수 있다).
     """
     d = _ohlcv(df)
-    sig = signals(d, p)
+    sig = signals(d, p, ref=ref)
     start = d.index[-1] - pd.Timedelta(days=days)
     rows = []
-    for key, label, _ in STAGES:
+    for key, label, _ in STAGES + [s_ for s_ in REF_STAGES if s_[0] in sig]:
         ep = episodes(sig[key], cooldown).loc[start:]
         for day in ep[ep].index:
             rows.append({"date": day, "key": key, "stage": label,
@@ -165,6 +182,8 @@ def stage_flags(f: pd.DataFrame, p: Params = Params()) -> pd.DataFrame:
                  — '데드난 후' 이므로 오늘의 데드는 세지 않는다            (댓글 매수타이밍)
     - di_gold  : DI 골든크로스 AND 셋업(기본 mouth)이 마지막으로 켜져 있던 날부터
                  close_win 거래일 이내                                      (댓글 '더 확실히')
+    - di_gold_obv (참고): DI 골든크로스 AND obv_gold 가 마지막으로 켜져 있던 날부터
+                 close_win 거래일 이내 AND di_gold 아님                      (DMI 2단계 없는 반등)
     """
     w = p.pit_win
     b = {k: f[k].fillna(False).astype(bool) for k in BASE_FLAGS}
@@ -179,6 +198,10 @@ def stage_flags(f: pd.DataFrame, p: Params = Params()) -> pd.DataFrame:
     out["days_since_setup"] = pos - last_setup
     # 3단계는 독립 조건이 아니다 — '입을 벌리다가 닫으러 가면서' 는 2단계(DMI) 의 그 입이다
     out["di_gold"] = b["di_cross"] & (out["days_since_setup"] <= p.close_win)
+    last_obv = pd.Series(np.where(out["obv_gold"], pos, np.nan), index=f.index).ffill()
+    out["days_since_obv"] = pos - last_obv
+    out["di_gold_obv"] = (b["di_cross"] & (out["days_since_obv"] <= p.close_win)
+                          & ~out["di_gold"])
     return out
 
 
@@ -212,11 +235,13 @@ def daily_sell(df: pd.DataFrame, p: Params = Params()) -> pd.Series:
     return out
 
 
-def signals(df: pd.DataFrame, p: Params = Params()) -> pd.DataFrame:
-    """단계별 신호 bool 테이블 (STAGES 순서)."""
+def signals(df: pd.DataFrame, p: Params = Params(), ref=()) -> pd.DataFrame:
+    """단계별 신호 bool 테이블 (STAGES 순서). ref 로 요청한 참고 신호는 맨 뒤에 붙는다."""
     f = features(df, p)
     out = f[["pit", "mouth", "obv_gold", "di_gold"]].copy()
     out["sell_w"] = daily_sell(df, p)
+    for k in _ref(ref):
+        out[k] = f[k]
     return out.fillna(False).astype(bool)
 
 
@@ -247,14 +272,16 @@ def checklist(df: pd.DataFrame, p: Params = Params()) -> list[dict]:
     return [{"name": n, "ok": ok, "detail": det} for n, ok, det in rows]
 
 
-def stage_now(df: pd.DataFrame, p: Params = Params(), recent: int = 3) -> dict:
+def stage_now(df: pd.DataFrame, p: Params = Params(), recent: int = 3, ref=()) -> dict:
     """현재 단계 요약: 최근 recent 거래일 안에 켜진 가장 높은 단계."""
-    s = signals(df, p).tail(recent)
+    s = signals(df, p, ref=ref).tail(recent)
     on = {k: bool(s[k].any()) for k in s.columns}
     if on.get("sell_w"):
         level = "sell_w"
     elif on.get("di_gold"):
         level = "di_gold"
+    elif on.get("di_gold_obv"):
+        level = "di_gold_obv"
     elif on.get("mouth"):
         level = "mouth"
     elif on.get("obv_gold"):
