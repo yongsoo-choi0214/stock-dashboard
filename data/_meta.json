@@ -14,11 +14,11 @@
     "target_rows": 300805
   },
   "us_equity": {
-    "last_run": "2026-11-12T04:59:32+09:00",
+    "last_run": "2026-11-12T10:52:00+09:00",
     "status": "ok",
     "rows": 68445,
-    "max_date": "2026-11-11",
-    "target_rows": 300815
+    "max_date": "2026-11-12",
+    "target_rows": 300818
   },
   "ecos": {
     "last_run": "2026-11-12T02:26:56+09:00",
