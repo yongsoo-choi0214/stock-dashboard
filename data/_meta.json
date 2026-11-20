@@ -1,10 +1,10 @@
 {
   "fred": {
-    "last_run": "2026-11-20T03:05:32+09:00",
+    "last_run": "2026-11-20T12:36:36+09:00",
     "status": "ok",
-    "rows": 36562,
-    "max_date": "2026-11-18",
-    "target_rows": 190542
+    "rows": 36570,
+    "max_date": "2026-11-19",
+    "target_rows": 190568
   },
   "krx_index": {
     "last_run": "2026-11-20T03:07:10+09:00",
@@ -14,18 +14,18 @@
     "target_rows": 300901
   },
   "us_equity": {
-    "last_run": "2026-11-20T11:29:42+09:00",
+    "last_run": "2026-11-20T12:38:05+09:00",
     "status": "ok",
     "rows": 68529,
     "max_date": "2026-11-20",
     "target_rows": 300914
   },
   "ecos": {
-    "last_run": "2026-11-20T03:07:01+09:00",
+    "last_run": "2026-11-20T12:38:00+09:00",
     "status": "ok",
-    "rows": 74274,
-    "max_date": "2026-11-19",
-    "target_rows": 190554
+    "rows": 74275,
+    "max_date": "2026-11-20",
+    "target_rows": 190569
   },
   "krx_flow": {
     "last_run": "2026-11-20T03:07:20+09:00",
@@ -34,11 +34,11 @@
     "note": "no new data"
   },
   "alfred": {
-    "last_run": "2026-11-20T03:08:02+09:00",
+    "last_run": "2026-11-20T12:38:10+09:00",
     "status": "ok",
-    "rows": 4387,
-    "max_date": "2026-11-18",
-    "target_rows": 4387
+    "rows": 4390,
+    "max_date": "2026-11-19",
+    "target_rows": 4390
   },
   "krx_aux": {
     "last_run": "2026-11-20T03:07:27+09:00",
