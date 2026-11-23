@@ -1,60 +1,60 @@
 {
   "fred": {
-    "last_run": "2026-11-21T12:19:22+09:00",
+    "last_run": "2026-11-24T06:01:19+09:00",
     "status": "ok",
-    "rows": 36576,
-    "max_date": "2026-11-20",
-    "target_rows": 190594
+    "rows": 36575,
+    "max_date": "2026-11-23",
+    "target_rows": 190596
   },
   "krx_index": {
-    "last_run": "2026-11-21T02:40:49+09:00",
+    "last_run": "2026-11-24T06:03:02+09:00",
     "status": "ok",
-    "rows": 16197,
-    "max_date": "2026-11-20",
-    "target_rows": 300917
+    "rows": 16200,
+    "max_date": "2026-11-23",
+    "target_rows": 300930
   },
   "us_equity": {
-    "last_run": "2026-11-21T12:21:00+09:00",
+    "last_run": "2026-11-24T06:03:41+09:00",
     "status": "ok",
-    "rows": 68537,
-    "max_date": "2026-11-20",
-    "target_rows": 300927
+    "rows": 68549,
+    "max_date": "2026-11-23",
+    "target_rows": 300940
   },
   "ecos": {
-    "last_run": "2026-11-21T12:20:57+09:00",
+    "last_run": "2026-11-24T06:02:55+09:00",
     "status": "ok",
-    "rows": 74287,
-    "max_date": "2026-11-20",
-    "target_rows": 190594
+    "rows": 74302,
+    "max_date": "2026-11-23",
+    "target_rows": 190611
   },
   "krx_flow": {
-    "last_run": "2026-11-21T02:40:55+09:00",
+    "last_run": "2026-11-24T06:03:09+09:00",
     "status": "ok",
     "rows": 0,
     "note": "no new data"
   },
   "alfred": {
-    "last_run": "2026-11-21T12:21:05+09:00",
+    "last_run": "2026-11-24T06:03:46+09:00",
     "status": "ok",
-    "rows": 4391,
-    "max_date": "2026-11-20",
-    "target_rows": 4391
+    "rows": 4392,
+    "max_date": "2026-11-23",
+    "target_rows": 4392
   },
   "krx_aux": {
-    "last_run": "2026-11-21T02:40:58+09:00",
+    "last_run": "2026-11-24T06:03:12+09:00",
     "status": "ok",
-    "rows": 32394,
-    "max_date": "2026-11-20",
-    "target_rows": 190588
+    "rows": 32400,
+    "max_date": "2026-11-23",
+    "target_rows": 190617
   },
   "krx_fundamental": {
-    "last_run": "2026-11-21T02:41:06+09:00",
+    "last_run": "2026-11-24T06:03:22+09:00",
     "status": "ok",
     "rows": 0,
     "note": "no new data"
   },
   "krx_sector": {
-    "last_run": "2026-11-21T02:41:17+09:00",
+    "last_run": "2026-11-24T06:03:37+09:00",
     "status": "ok",
     "rows": 0,
     "note": "no new data"
