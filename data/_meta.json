@@ -1,60 +1,60 @@
 {
   "fred": {
-    "last_run": "2026-11-25T13:57:43+09:00",
+    "last_run": "2026-11-26T04:02:28+09:00",
     "status": "ok",
-    "rows": 36589,
+    "rows": 36590,
     "max_date": "2026-11-24",
-    "target_rows": 190651
+    "target_rows": 190654
   },
   "krx_index": {
-    "last_run": "2026-11-25T05:04:06+09:00",
+    "last_run": "2026-11-26T04:04:15+09:00",
     "status": "ok",
-    "rows": 16203,
-    "max_date": "2026-11-24",
-    "target_rows": 300951
+    "rows": 16206,
+    "max_date": "2026-11-25",
+    "target_rows": 300964
   },
   "us_equity": {
-    "last_run": "2026-11-25T13:59:14+09:00",
+    "last_run": "2026-11-26T04:04:48+09:00",
     "status": "ok",
-    "rows": 68567,
+    "rows": 68574,
     "max_date": "2026-11-25",
-    "target_rows": 300961
+    "target_rows": 300974
   },
   "ecos": {
-    "last_run": "2026-11-25T13:59:10+09:00",
+    "last_run": "2026-11-26T04:04:08+09:00",
     "status": "ok",
-    "rows": 74317,
+    "rows": 74329,
     "max_date": "2026-11-30",
-    "target_rows": 190653
+    "target_rows": 190666
   },
   "krx_flow": {
-    "last_run": "2026-11-25T05:04:14+09:00",
+    "last_run": "2026-11-26T04:04:22+09:00",
     "status": "ok",
     "rows": 0,
     "note": "no new data"
   },
   "alfred": {
-    "last_run": "2026-11-25T13:59:19+09:00",
+    "last_run": "2026-11-26T04:04:54+09:00",
     "status": "ok",
-    "rows": 4393,
-    "max_date": "2026-11-24",
-    "target_rows": 4393
+    "rows": 4394,
+    "max_date": "2026-11-25",
+    "target_rows": 4394
   },
   "krx_aux": {
-    "last_run": "2026-11-25T05:04:17+09:00",
+    "last_run": "2026-11-26T04:04:25+09:00",
     "status": "ok",
-    "rows": 32406,
-    "max_date": "2026-11-24",
-    "target_rows": 190644
+    "rows": 32412,
+    "max_date": "2026-11-25",
+    "target_rows": 190672
   },
   "krx_fundamental": {
-    "last_run": "2026-11-25T05:04:25+09:00",
+    "last_run": "2026-11-26T04:04:31+09:00",
     "status": "ok",
     "rows": 0,
     "note": "no new data"
   },
   "krx_sector": {
-    "last_run": "2026-11-25T05:04:39+09:00",
+    "last_run": "2026-11-26T04:04:43+09:00",
     "status": "ok",
     "rows": 0,
     "note": "no new data"
